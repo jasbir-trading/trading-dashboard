@@ -4058,67 +4058,6 @@ st.markdown("---")
 st.subheader("📐 Chart Pattern Detection")
 st.caption("Automatically scans your chart for the most important trading patterns")
 
-# ── VOLUME PROFILE
-def calculate_volume_profile(df, bins=30):
-    """
-    Volume Profile = volume at each price level
-    Shows where most trading happened = key S/R levels
-    """
-    price_min = df["low"].min()
-    price_max = df["high"].max()
-    price_range = price_max - price_min
-    bin_size = price_range / bins
-
-    vp = []
-    for i in range(bins):
-        level_low  = price_min + i * bin_size
-        level_high = price_min + (i + 1) * bin_size
-        level_mid  = (level_low + level_high) / 2
-
-        # Find candles that overlap this price level
-        mask = (df["high"] >= level_low) & (df["low"] <= level_high)
-        vol_at_level = df.loc[mask, "volume"].sum()
-
-        # Split into buy/sell volume
-        buy_mask  = mask & (df["close"] >= df["open"])
-        sell_mask = mask & (df["close"] < df["open"])
-        buy_vol   = df.loc[buy_mask,  "volume"].sum()
-        sell_vol  = df.loc[sell_mask, "volume"].sum()
-
-        vp.append({
-            "price":    level_mid,
-            "volume":   vol_at_level,
-            "buy_vol":  buy_vol,
-            "sell_vol": sell_vol,
-            "level_low":  level_low,
-            "level_high": level_high
-        })
-
-    vp_df = pd.DataFrame(vp)
-    if not vp_df.empty:
-        max_vol = vp_df["volume"].max()
-        vp_df["vol_pct"] = vp_df["volume"] / max_vol * 100
-
-        # Point of Control (POC) = highest volume price
-        poc_idx = vp_df["volume"].idxmax()
-        vp_df["is_poc"] = False
-        vp_df.at[poc_idx, "is_poc"] = True
-
-        # Value Area (70% of volume)
-        total_vol = vp_df["volume"].sum()
-        va_threshold = total_vol * 0.70
-        sorted_vp = vp_df.sort_values("volume", ascending=False)
-        va_vol = 0; va_prices = []
-        for _, row in sorted_vp.iterrows():
-            va_vol += row["volume"]
-            va_prices.append(row["price"])
-            if va_vol >= va_threshold:
-                break
-        vp_df["in_value_area"] = vp_df["price"].isin(va_prices)
-        vp_df["vah"] = max(va_prices)  # Value Area High
-        vp_df["val"] = min(va_prices)  # Value Area Low
-
-    return vp_df
 
 def detect_patterns(df):
     patterns = []
@@ -4648,4 +4587,64 @@ with mc2:
 st.markdown("---")
 st.caption("Education only. Never risk money you cannot afford to lose.")
 
+# ── VOLUME PROFILE
+def calculate_volume_profile(df, bins=30):
+    """
+    Volume Profile = volume at each price level
+    Shows where most trading happened = key S/R levels
+    """
+    price_min = df["low"].min()
+    price_max = df["high"].max()
+    price_range = price_max - price_min
+    bin_size = price_range / bins
 
+    vp = []
+    for i in range(bins):
+        level_low  = price_min + i * bin_size
+        level_high = price_min + (i + 1) * bin_size
+        level_mid  = (level_low + level_high) / 2
+
+        # Find candles that overlap this price level
+        mask = (df["high"] >= level_low) & (df["low"] <= level_high)
+        vol_at_level = df.loc[mask, "volume"].sum()
+
+        # Split into buy/sell volume
+        buy_mask  = mask & (df["close"] >= df["open"])
+        sell_mask = mask & (df["close"] < df["open"])
+        buy_vol   = df.loc[buy_mask,  "volume"].sum()
+        sell_vol  = df.loc[sell_mask, "volume"].sum()
+
+        vp.append({
+            "price":    level_mid,
+            "volume":   vol_at_level,
+            "buy_vol":  buy_vol,
+            "sell_vol": sell_vol,
+            "level_low":  level_low,
+            "level_high": level_high
+        })
+
+    vp_df = pd.DataFrame(vp)
+    if not vp_df.empty:
+        max_vol = vp_df["volume"].max()
+        vp_df["vol_pct"] = vp_df["volume"] / max_vol * 100
+
+        # Point of Control (POC) = highest volume price
+        poc_idx = vp_df["volume"].idxmax()
+        vp_df["is_poc"] = False
+        vp_df.at[poc_idx, "is_poc"] = True
+
+        # Value Area (70% of volume)
+        total_vol = vp_df["volume"].sum()
+        va_threshold = total_vol * 0.70
+        sorted_vp = vp_df.sort_values("volume", ascending=False)
+        va_vol = 0; va_prices = []
+        for _, row in sorted_vp.iterrows():
+            va_vol += row["volume"]
+            va_prices.append(row["price"])
+            if va_vol >= va_threshold:
+                break
+        vp_df["in_value_area"] = vp_df["price"].isin(va_prices)
+        vp_df["vah"] = max(va_prices)  # Value Area High
+        vp_df["val"] = min(va_prices)  # Value Area Low
+
+    return vp_df
