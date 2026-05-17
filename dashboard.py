@@ -396,7 +396,7 @@ def full_signal(df, support_zones, resistance_zones):
 
     # Volume Profile signals
     try:
-        vp_tmp = calculate_volume_profile(df, bins=30)
+        vp_tmp = calculate_volume_profile(df, bins=30) if len(df) > 30 else pd.DataFrame()
         if not vp_tmp.empty:
             poc_tmp = vp_tmp[vp_tmp["is_poc"]]["price"].values[0]
             vah_tmp = vp_tmp["vah"].iloc[0]
@@ -1333,20 +1333,22 @@ with tab1:
                 annotation_font_color="#ff4444",annotation_position="right")
 
     # ── Volume Profile lines on main chart
-    vp_main = calculate_volume_profile(df, bins=30)
-    if not vp_main.empty:
-        poc_p = vp_main[vp_main["is_poc"]]["price"].values[0]
-        vah_p = vp_main["vah"].iloc[0]
-        val_p = vp_main["val"].iloc[0]
-        fig.add_hline(y=poc_p, line_dash="dot", line_color="#FFD700", line_width=1.5,
-            annotation_text="POC", annotation_font_color="#FFD700",
-            annotation_position="right", row=1, col=1)
-        fig.add_hline(y=vah_p, line_dash="dot", line_color="#00bfff", line_width=1,
-            annotation_text="VAH", annotation_font_color="#00bfff",
-            annotation_position="right", row=1, col=1)
-        fig.add_hline(y=val_p, line_dash="dot", line_color="#00bfff", line_width=1,
-            annotation_text="VAL", annotation_font_color="#00bfff",
-            annotation_position="right", row=1, col=1)
+    try:
+        vp_main = calculate_volume_profile(df, bins=30)
+        if not vp_main.empty:
+            poc_p = vp_main[vp_main["is_poc"]]["price"].values[0]
+            vah_p = vp_main["vah"].iloc[0]
+            val_p = vp_main["val"].iloc[0]
+            fig.add_hline(y=poc_p, line_dash="dot", line_color="#FFD700", line_width=1.5,
+                annotation_text="POC", annotation_font_color="#FFD700",
+                annotation_position="right", row=1, col=1)
+            fig.add_hline(y=vah_p, line_dash="dot", line_color="#00bfff", line_width=1,
+                annotation_text="VAH", annotation_font_color="#00bfff",
+                annotation_position="right", row=1, col=1)
+            fig.add_hline(y=val_p, line_dash="dot", line_color="#00bfff", line_width=1,
+                annotation_text="VAL", annotation_font_color="#00bfff",
+                annotation_position="right", row=1, col=1)
+    except: pass
 
     # BOS markers always shown
     bos_b = df[df["bos_bull"]].tail(6)
