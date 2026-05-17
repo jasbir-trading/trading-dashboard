@@ -925,7 +925,10 @@ for idx, (tf_label, s) in enumerate(all_setups.items()):
         # ── CONFLUENCE FILTER — only alert when signals agree
         if alerts_on and tg_token and tg_chat_id:
             # Get patterns for this TF
-            tf_patterns = detect_patterns(df_tmp) if not df_tmp.empty else []
+            try:
+                tf_patterns = detect_patterns(df_tmp) if not df_tmp.empty else []
+            except:
+                tf_patterns = []
             bull_patterns = [p for p in tf_patterns if p["type"] == "bullish"]
             bear_patterns = [p for p in tf_patterns if p["type"] == "bearish"]
             has_bull_pattern = len(bull_patterns) > 0
@@ -4525,6 +4528,12 @@ bull_pats = [p for p in patterns_all if p["type"]=="bullish"]
 bear_pats = [p for p in patterns_all if p["type"]=="bearish"]
 
 # Master LONG conditions
+# Safe defaults if not defined
+try: bull_count
+except NameError: bull_count = 0
+try: bear_count
+except NameError: bear_count = 0
+
 master_long = (
     sc >= 6 and                          # Strong signal score
     bias == "BULLISH" and               # Trend bullish
@@ -4636,3 +4645,5 @@ with mc2:
 
 st.markdown("---")
 st.caption("Education only. Never risk money you cannot afford to lose.")
+
+
