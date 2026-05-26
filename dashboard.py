@@ -85,7 +85,7 @@ limit      = st.sidebar.slider("Candles", 100, 500, 200)
 auto_refresh = st.sidebar.checkbox("Auto Refresh 30s")
 st.sidebar.markdown("---")
 st.sidebar.subheader("Telegram")
-tg_token   = st.sidebar.text_input("Bot Token", type="password", value="8247892871:AAFoKaOFCpIXE_BAB5w-ZhvPyq6fFUQfO_w")
+tg_token   = st.sidebar.text_input("Bot Token", type="password", value="8247892871:AAEKDmYgPDFaJ0Biy6oOmBn339J-gCUjkDU")
 tg_chat_id = st.sidebar.text_input("Chat ID", value="5651074933")
 alerts_on  = st.sidebar.checkbox("Enable Alerts", value=True)
 st.sidebar.markdown("---")
@@ -3483,11 +3483,15 @@ with st.spinner("Loading order book..."):
     ob  = get_ob(ob_symbol)
     tdf = get_trades(ob_symbol)
 
-if ob and "bids" in ob:
+if ob and "bids" in ob and "asks" in ob and len(ob["bids"]) > 0 and len(ob["asks"]) > 0:
     bids = ob["bids"][:50]; asks = ob["asks"][:50]
-    bp = [b[0] for b in bids]; bq = [b[1] for b in bids]
-    ap = [a[0] for a in asks]; aq = [a[1] for a in asks]
-    mid = (bp[0]+ap[0])/2
+    if not bids or not asks:
+        st.warning("Order book empty — Binance may restrict this region")
+        bids = []; asks = []
+    else:
+        bp = [b[0] for b in bids]; bq = [b[1] for b in bids]
+        ap = [a[0] for a in asks]; aq = [a[1] for a in asks]
+        mid = (bp[0]+ap[0])/2 if bp and ap else 0
     tbv = sum(p*q for p,q in bids); tav = sum(p*q for p,q in asks)
     tv  = tbv+tav
     bpct = tbv/tv*100 if tv>0 else 50; apct = tav/tv*100 if tv>0 else 50
