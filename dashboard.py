@@ -3459,12 +3459,16 @@ curr_price = float(lat["close"])
 st.markdown("### ⚖️ Long/Short Ratio")
 st.caption("More longs = more liquidations below. More shorts = more liquidations above.")
 
-if ls_ratio:
-    ls_df = pd.DataFrame(ls_ratio)
-    ls_df["timestamp"] = pd.to_datetime(ls_df["timestamp"].astype(float), unit="ms")
-    ls_df["longShortRatio"] = ls_df["longShortRatio"].astype(float)
-    ls_df["longAccount"]    = ls_df["longAccount"].astype(float)
-    ls_df["shortAccount"]   = ls_df["shortAccount"].astype(float)
+if ls_ratio and isinstance(ls_ratio, list) and len(ls_ratio) > 0 and isinstance(ls_ratio[0], dict):
+    try:
+        ls_df = pd.DataFrame(ls_ratio)
+        ls_df["timestamp"] = pd.to_datetime(ls_df["timestamp"].astype(float), unit="ms")
+        ls_df["longShortRatio"] = ls_df["longShortRatio"].astype(float)
+        ls_df["longAccount"]    = ls_df["longAccount"].astype(float)
+        ls_df["shortAccount"]   = ls_df["shortAccount"].astype(float)
+    except Exception as e:
+        st.warning(f"Long/Short ratio data unavailable from this region: {e}")
+        ls_ratio = []
 
     latest_ls = ls_df.iloc[-1]
     lsr = float(latest_ls["longShortRatio"])
@@ -5008,12 +5012,16 @@ curr_price = float(lat["close"])
 st.markdown("### ⚖️ Long/Short Ratio")
 st.caption("More longs = more liquidations below. More shorts = more liquidations above.")
 
-if ls_ratio:
-    ls_df = pd.DataFrame(ls_ratio)
-    ls_df["timestamp"] = pd.to_datetime(ls_df["timestamp"].astype(float), unit="ms")
-    ls_df["longShortRatio"] = ls_df["longShortRatio"].astype(float)
-    ls_df["longAccount"]    = ls_df["longAccount"].astype(float)
-    ls_df["shortAccount"]   = ls_df["shortAccount"].astype(float)
+if ls_ratio and isinstance(ls_ratio, list) and len(ls_ratio) > 0 and isinstance(ls_ratio[0], dict):
+    try:
+        ls_df = pd.DataFrame(ls_ratio)
+        ls_df["timestamp"] = pd.to_datetime(ls_df["timestamp"].astype(float), unit="ms")
+        ls_df["longShortRatio"] = ls_df["longShortRatio"].astype(float)
+        ls_df["longAccount"]    = ls_df["longAccount"].astype(float)
+        ls_df["shortAccount"]   = ls_df["shortAccount"].astype(float)
+    except Exception as e:
+        st.warning(f"Long/Short ratio data unavailable from this region: {e}")
+        ls_ratio = []
 
     latest_ls = ls_df.iloc[-1]
     lsr = float(latest_ls["longShortRatio"])
