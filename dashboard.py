@@ -1613,7 +1613,7 @@ with tab1:
     fig.update_yaxes(title_text="Volume", row=2,col=1)
     fig.update_yaxes(title_text="RSI",    row=3,col=1)
     fig.update_yaxes(title_text="MACD",   row=4,col=1)
-    st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig,use_container_width=True, key="chart_1")
 
 
 # ─── helper to build a direction chart (Daily / 4H)
@@ -2189,7 +2189,7 @@ if corr_results:
     )
     lag_fig.update_xaxes(gridcolor="#111118")
     lag_fig.update_yaxes(gridcolor="#111118")
-    st.plotly_chart(lag_fig, use_container_width=True)
+    st.plotly_chart(lag_fig, use_container_width=True, key="chart_8")
 
     st.markdown("---")
 
@@ -2260,7 +2260,7 @@ if corr_results:
     )
     pc_fig.update_xaxes(gridcolor="#111118")
     pc_fig.update_yaxes(gridcolor="#111118")
-    st.plotly_chart(pc_fig, use_container_width=True)
+    st.plotly_chart(pc_fig, use_container_width=True, key="chart_9")
 
     # ── BEST TRADE RECOMMENDATION
     st.markdown("---")
@@ -2436,7 +2436,7 @@ sess_fig.update_layout(height=180, template="plotly_dark",
     paper_bgcolor="#050508", plot_bgcolor="#050508",
     title="24h Session Map — Current UTC Time Shown",
     margin=dict(t=40, b=40, l=10, r=10))
-st.plotly_chart(sess_fig, use_container_width=True)
+st.plotly_chart(sess_fig, use_container_width=True, key="chart_10")
 
 # ════════════════════════════════════════════════════════════════
 # ── HEAT MAP
@@ -2506,7 +2506,7 @@ if hmap_data:
         margin=dict(t=40, b=20)
     )
     hmap_fig.add_hline(y=0, line_color="white", line_width=1, opacity=0.3)
-    st.plotly_chart(hmap_fig, use_container_width=True)
+    st.plotly_chart(hmap_fig, use_container_width=True, key="chart_11")
 
 # ════════════════════════════════════════════════════════════════
 # ── NEWS FEED
@@ -2667,7 +2667,7 @@ if st.session_state.journal:
         pnl_fig.update_layout(height=250, template="plotly_dark",
             paper_bgcolor="#050508", plot_bgcolor="#050508",
             title="Cumulative P&L ($)", margin=dict(t=30, b=20))
-        st.plotly_chart(pnl_fig, use_container_width=True)
+        st.plotly_chart(pnl_fig, use_container_width=True, key="chart_12")
 
     # Full journal table
     st.markdown("**All Trades:**")
@@ -2849,7 +2849,7 @@ if st.button("▶️ Run Backtest", key="btn_16"):
                 paper_bgcolor="#050508", plot_bgcolor="#050508",
                 title=f"Backtest Results — {bt_signal} | Hold {bt_hold} candles",
                 margin=dict(t=30, b=20))
-            st.plotly_chart(bt_fig, use_container_width=True)
+            st.plotly_chart(bt_fig, use_container_width=True, key="chart_13")
             st.dataframe(btdf, use_container_width=True, hide_index=True)
 
             if bt_wr >= 55:
@@ -3003,7 +3003,7 @@ with fgc1:
                 paper_bgcolor="#050508", plot_bgcolor="#050508",
                 title="30 Day Fear & Greed History",
                 margin=dict(t=30, b=20), showlegend=False)
-            st.plotly_chart(fg_fig, use_container_width=True)
+            st.plotly_chart(fg_fig, use_container_width=True, key="chart_14")
     else:
         st.warning("Could not load Fear & Greed data")
 
@@ -3044,7 +3044,7 @@ with fgc2:
             margin=dict(t=40, b=20),
             showlegend=False
         )
-        st.plotly_chart(dom_fig, use_container_width=True)
+        st.plotly_chart(dom_fig, use_container_width=True, key="chart_15")
 
         # Alt season signal
         st.markdown(f"""
@@ -3352,7 +3352,7 @@ if ob and "bids" in ob and "asks" in ob and len(ob["bids"]) > 0 and len(ob["asks
         dfig.update_layout(height=300,template="plotly_dark",paper_bgcolor="#050508",plot_bgcolor="#050508",
             title="Price + Cumulative Delta — Rising = more buying",margin=dict(t=40,b=20,l=10,r=10))
         dfig.update_xaxes(gridcolor="#0d0d18"); dfig.update_yaxes(gridcolor="#0d0d18")
-        st.plotly_chart(dfig,use_container_width=True)
+        st.plotly_chart(dfig,use_container_width=True, key="chart_17")
 
         st.markdown("**Large Trades >$10K:**")
         lg = tdf[tdf["value"]>=10000].tail(15)
@@ -3513,7 +3513,7 @@ if ls_ratio and isinstance(ls_ratio, list) and len(ls_ratio) > 0 and isinstance(
     )
     ls_fig.update_xaxes(gridcolor="#0d0d18")
     ls_fig.update_yaxes(gridcolor="#0d0d18")
-    st.plotly_chart(ls_fig, use_container_width=True)
+    st.plotly_chart(ls_fig, use_container_width=True, key="chart_18")
 
 # ── TOP TRADER RATIO
 if top_ratio:
@@ -3563,7 +3563,7 @@ if top_ratio:
     )
     tt_fig.update_xaxes(gridcolor="#0d0d18")
     tt_fig.update_yaxes(gridcolor="#0d0d18")
-    st.plotly_chart(tt_fig, use_container_width=True)
+    st.plotly_chart(tt_fig, use_container_width=True, key="chart_19")
 
 st.markdown("---")
 
@@ -3746,7 +3746,7 @@ heat_fig.update_layout(
     margin=dict(t=50, b=20, l=80, r=150),
     showlegend=False
 )
-st.plotly_chart(heat_fig, use_container_width=True)
+st.plotly_chart(heat_fig, use_container_width=True, key="chart_20")
 
 # ── KEY LIQUIDATION TARGETS
 st.markdown("### 🎯 Key Liquidation Price Targets")
@@ -3989,7 +3989,7 @@ sess_fig.update_layout(height=180, template="plotly_dark",
     paper_bgcolor="#050508", plot_bgcolor="#050508",
     title="24h Session Map — Current UTC Time Shown",
     margin=dict(t=40, b=40, l=10, r=10))
-st.plotly_chart(sess_fig, use_container_width=True)
+st.plotly_chart(sess_fig, use_container_width=True, key="chart_21")
 
 # ════════════════════════════════════════════════════════════════
 # ── HEAT MAP
@@ -4059,7 +4059,7 @@ if hmap_data:
         margin=dict(t=40, b=20)
     )
     hmap_fig.add_hline(y=0, line_color="white", line_width=1, opacity=0.3)
-    st.plotly_chart(hmap_fig, use_container_width=True)
+    st.plotly_chart(hmap_fig, use_container_width=True, key="chart_22")
 
 # ════════════════════════════════════════════════════════════════
 # ── NEWS FEED
@@ -4220,7 +4220,7 @@ if st.session_state.journal:
         pnl_fig.update_layout(height=250, template="plotly_dark",
             paper_bgcolor="#050508", plot_bgcolor="#050508",
             title="Cumulative P&L ($)", margin=dict(t=30, b=20))
-        st.plotly_chart(pnl_fig, use_container_width=True)
+        st.plotly_chart(pnl_fig, use_container_width=True, key="chart_23")
 
     # Full journal table
     st.markdown("**All Trades:**")
@@ -4402,7 +4402,7 @@ if st.button("▶️ Run Backtest", key="btn_23"):
                 paper_bgcolor="#050508", plot_bgcolor="#050508",
                 title=f"Backtest Results — {bt_signal} | Hold {bt_hold} candles",
                 margin=dict(t=30, b=20))
-            st.plotly_chart(bt_fig, use_container_width=True)
+            st.plotly_chart(bt_fig, use_container_width=True, key="chart_24")
             st.dataframe(btdf, use_container_width=True, hide_index=True)
 
             if bt_wr >= 55:
@@ -4556,7 +4556,7 @@ with fgc1:
                 paper_bgcolor="#050508", plot_bgcolor="#050508",
                 title="30 Day Fear & Greed History",
                 margin=dict(t=30, b=20), showlegend=False)
-            st.plotly_chart(fg_fig, use_container_width=True)
+            st.plotly_chart(fg_fig, use_container_width=True, key="chart_25")
     else:
         st.warning("Could not load Fear & Greed data")
 
@@ -4597,7 +4597,7 @@ with fgc2:
             margin=dict(t=40, b=20),
             showlegend=False
         )
-        st.plotly_chart(dom_fig, use_container_width=True)
+        st.plotly_chart(dom_fig, use_container_width=True, key="chart_26")
 
         # Alt season signal
         st.markdown(f"""
@@ -4905,7 +4905,7 @@ if ob and "bids" in ob and "asks" in ob and len(ob["bids"]) > 0 and len(ob["asks
         dfig.update_layout(height=300,template="plotly_dark",paper_bgcolor="#050508",plot_bgcolor="#050508",
             title="Price + Cumulative Delta — Rising = more buying",margin=dict(t=40,b=20,l=10,r=10))
         dfig.update_xaxes(gridcolor="#0d0d18"); dfig.update_yaxes(gridcolor="#0d0d18")
-        st.plotly_chart(dfig,use_container_width=True)
+        st.plotly_chart(dfig,use_container_width=True, key="chart_28")
 
         st.markdown("**Large Trades >$10K:**")
         lg = tdf[tdf["value"]>=10000].tail(15)
@@ -5066,7 +5066,7 @@ if ls_ratio and isinstance(ls_ratio, list) and len(ls_ratio) > 0 and isinstance(
     )
     ls_fig.update_xaxes(gridcolor="#0d0d18")
     ls_fig.update_yaxes(gridcolor="#0d0d18")
-    st.plotly_chart(ls_fig, use_container_width=True)
+    st.plotly_chart(ls_fig, use_container_width=True, key="chart_29")
 
 # ── TOP TRADER RATIO
 if top_ratio:
@@ -5116,7 +5116,7 @@ if top_ratio:
     )
     tt_fig.update_xaxes(gridcolor="#0d0d18")
     tt_fig.update_yaxes(gridcolor="#0d0d18")
-    st.plotly_chart(tt_fig, use_container_width=True)
+    st.plotly_chart(tt_fig, use_container_width=True, key="chart_30")
 
 st.markdown("---")
 
@@ -5299,7 +5299,7 @@ heat_fig.update_layout(
     margin=dict(t=50, b=20, l=80, r=150),
     showlegend=False
 )
-st.plotly_chart(heat_fig, use_container_width=True)
+st.plotly_chart(heat_fig, use_container_width=True, key="chart_31")
 
 # ── KEY LIQUIDATION TARGETS
 st.markdown("### 🎯 Key Liquidation Price Targets")
