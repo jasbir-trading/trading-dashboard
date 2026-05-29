@@ -3516,15 +3516,17 @@ if ls_ratio and isinstance(ls_ratio, list) and len(ls_ratio) > 0 and isinstance(
     st.plotly_chart(ls_fig, use_container_width=True, key="pc_18")
 
 # ── TOP TRADER RATIO
-if top_ratio:
+if top_ratio and isinstance(top_ratio, list) and len(top_ratio) > 0 and isinstance(top_ratio[0], dict):
     st.markdown("### 🏆 Top Trader Long/Short Ratio")
     st.caption("What are the BIG traders doing? This matters more than retail.")
-
-    tt_df = pd.DataFrame(top_ratio)
-    tt_df["timestamp"]       = pd.to_datetime(tt_df["timestamp"].astype(float), unit="ms")
-    tt_df["longShortRatio"]  = tt_df["longShortRatio"].astype(float)
-    tt_df["longAccount"]     = tt_df["longAccount"].astype(float)
-    tt_df["shortAccount"]    = tt_df["shortAccount"].astype(float)
+    try:
+        tt_df = pd.DataFrame(top_ratio)
+        tt_df["timestamp"]       = pd.to_datetime(tt_df["timestamp"].astype(float), unit="ms")
+        tt_df["longShortRatio"]  = tt_df["longShortRatio"].astype(float)
+        tt_df["longAccount"]     = tt_df["longAccount"].astype(float)
+        tt_df["shortAccount"]    = tt_df["shortAccount"].astype(float)
+    except:
+        tt_df = pd.DataFrame()
 
     latest_tt = tt_df.iloc[-1]
     tt_lsr    = float(latest_tt["longShortRatio"])
@@ -5069,15 +5071,17 @@ if ls_ratio and isinstance(ls_ratio, list) and len(ls_ratio) > 0 and isinstance(
     st.plotly_chart(ls_fig, use_container_width=True, key="pc_29")
 
 # ── TOP TRADER RATIO
-if top_ratio:
+if top_ratio and isinstance(top_ratio, list) and len(top_ratio) > 0 and isinstance(top_ratio[0], dict):
     st.markdown("### 🏆 Top Trader Long/Short Ratio")
     st.caption("What are the BIG traders doing? This matters more than retail.")
-
-    tt_df = pd.DataFrame(top_ratio)
-    tt_df["timestamp"]       = pd.to_datetime(tt_df["timestamp"].astype(float), unit="ms")
-    tt_df["longShortRatio"]  = tt_df["longShortRatio"].astype(float)
-    tt_df["longAccount"]     = tt_df["longAccount"].astype(float)
-    tt_df["shortAccount"]    = tt_df["shortAccount"].astype(float)
+    try:
+        tt_df = pd.DataFrame(top_ratio)
+        tt_df["timestamp"]       = pd.to_datetime(tt_df["timestamp"].astype(float), unit="ms")
+        tt_df["longShortRatio"]  = tt_df["longShortRatio"].astype(float)
+        tt_df["longAccount"]     = tt_df["longAccount"].astype(float)
+        tt_df["shortAccount"]    = tt_df["shortAccount"].astype(float)
+    except:
+        tt_df = pd.DataFrame()
 
     latest_tt = tt_df.iloc[-1]
     tt_lsr    = float(latest_tt["longShortRatio"])
