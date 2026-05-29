@@ -4130,18 +4130,18 @@ if "journal" not in st.session_state:
 
 with st.expander("➕ Log A New Trade", expanded=False):
     jc1, jc2, jc3 = st.columns(3)
-    j_coin    = jc1.selectbox("Coin", ["BTC","ETH","SOL","ADA","MATIC","BNB","AVAX","LINK","DOT","ATOM","NEAR","OP","ARB","DOGE","XRP","INJ","SUI","APT","FET","RNDR"], key="j_coin")
-    j_dir     = jc2.selectbox("Direction", ["LONG","SHORT"], key="j_dir")
-    j_result  = jc3.selectbox("Result", ["WIN","LOSS","BREAKEVEN"], key="j_result")
+    j_coin    = jc1.selectbox("Coin", ["BTC","ETH","SOL","ADA","MATIC","BNB","AVAX","LINK","DOT","ATOM","NEAR","OP","ARB","DOGE","XRP","INJ","SUI","APT","FET","RNDR"], key="j_coin_2")
+    j_dir     = jc2.selectbox("Direction", ["LONG","SHORT"], key="j_dir_2")
+    j_result  = jc3.selectbox("Result", ["WIN","LOSS","BREAKEVEN"], key="j_result_2")
     jc4, jc5, jc6 = st.columns(3)
-    j_entry   = jc4.number_input("Entry Price", value=0.0, key="j_entry")
-    j_exit    = jc5.number_input("Exit Price",  value=0.0, key="j_exit")
-    j_size    = jc6.number_input("Position Size (USDT)", value=10.0, key="j_size")
+    j_entry   = jc4.number_input("Entry Price", value=0.0, key="j_entry_2")
+    j_exit    = jc5.number_input("Exit Price",  value=0.0, key="j_exit_2")
+    j_size    = jc6.number_input("Position Size (USDT)", value=10.0, key="j_size_2")
     jc7, jc8  = st.columns(2)
     j_signal  = jc7.selectbox("Signal That Triggered",
-        ["BOS","CHoCH","OB Retest","FVG Fill","Liquidity Sweep","Support Bounce","Resistance Reject","Other"], key="j_signal")
-    j_tf      = jc8.selectbox("Timeframe Used", ["15m","1h","4h","1d"], key="j_tf")
-    j_notes   = st.text_area("Notes / What I Learned", placeholder="Why did I take this trade? What happened? What would I do differently?", key="j_notes")
+        ["BOS","CHoCH","OB Retest","FVG Fill","Liquidity Sweep","Support Bounce","Resistance Reject","Other"], key="j_signal_2")
+    j_tf      = jc8.selectbox("Timeframe Used", ["15m","1h","4h","1d"], key="j_tf_2")
+    j_notes   = st.text_area("Notes / What I Learned", placeholder="Why did I take this trade? What happened? What would I do differently?", key="j_notes_2")
 
     if st.button("💾 Save Trade", key="btn_18"):
         if j_entry > 0 and j_exit > 0:
@@ -4259,12 +4259,12 @@ if st.session_state.paper_position is None:
     # Open trade
     st.markdown("**Open Paper Trade:**")
     pc1, pc2, pc3 = st.columns(3)
-    p_dir    = pc1.selectbox("Direction", ["LONG","SHORT"], key="p_dir")
+    p_dir    = pc1.selectbox("Direction", ["LONG","SHORT"], key="p_dir_2")
     p_size   = pc2.number_input("Trade Size (USDT)", value=50.0, min_value=1.0,
-                                 max_value=st.session_state.paper_balance, key="p_size")
-    p_lev    = pc3.selectbox("Leverage", ["1x","2x","3x","5x","10x"], key="p_lev")
-    p_sl     = st.number_input("Stop Loss Price", value=round(current_price * 0.98, 2), key="p_sl")
-    p_tp     = st.number_input("Take Profit Price", value=round(current_price * 1.03, 2), key="p_tp")
+                                 max_value=st.session_state.paper_balance, key="p_size_2")
+    p_lev    = pc3.selectbox("Leverage", ["1x","2x","3x","5x","10x"], key="p_lev_2")
+    p_sl     = st.number_input("Stop Loss Price", value=round(current_price * 0.98, 2), key="p_sl_2")
+    p_tp     = st.number_input("Take Profit Price", value=round(current_price * 1.03, 2), key="p_tp_2")
 
     if st.button("📈 Open Paper Trade", key="btn_20"):
         lev_val = int(p_lev.replace("x",""))
