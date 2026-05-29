@@ -112,6 +112,148 @@ def send_tg(token, chat_id, msg):
             json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=5)
     except: pass
 
+def detect_patterns(df):
+    patterns = []
+    n = len(df)
+    if n < 20:
+        return patterns
+
+    highs  = df["high"].values
+    lows   = df["low"].values
+    closes = df["close"].values
+    atr    = df["atr"].iloc[-1]
+    tol    = atr * 0.5
+
+    # Double Top
+    for i in range(10, n-5):
+        for j in range(i+5, n-3):
+            h1 = highs[i]; h2 = highs[j]
+            valley = min(lows[i:j])
+            if (abs(h1-h2) < tol and h1 > valley + atr*2 and
+                h2 > valley + atr*2 and closes[-1] < valley + tol):
+                patterns.append({"name":"Double Top 🔴","type":"bearish",
+                    "signal":"BEARISH REVERSAL",
+                    "detail":f"Two peaks near ${(h1+h2)/2:,.0f} — expecting DROP",
+                    "action":"Look for short after neckline break","strength":"🔥🔥🔥"})
+                break
+
+    # Double Bottom
+    for i in range(10, n-5):
+        for j in range(i+5, n-3):
+            l1 = lows[i]; l2 = lows[j]
+            peak = max(highs[i:j])
+            if (abs(l1-l2) < tol and l1 < peak - atr*2 and
+                l2 < peak - atr*2 and closes[-1] > peak - tol):
+                patterns.append({"name":"Double Bottom 🟢","type":"bullish",
+                    "signal":"BULLISH REVERSAL",
+                    "detail":f"Two lows near ${(l1+l2)/2:,.0f} — expecting PUMP",
+                    "action":"Look for long after neckline break","strength":"🔥🔥🔥"})
+                break
+
+    # Bull Flag
+    if n >= 15:
+        seg = df.tail(15)
+        first5 = seg.head(5); last10 = seg.tail(10)
+        pole_up = (first5["close"].iloc[-1]-first5["close"].iloc[0])/first5["close"].iloc[0] > 0.02
+        flag_cons = abs(last10["close"].iloc[-1]-last10["close"].iloc[0])/last10["close"].iloc[0] < 0.01
+        if pole_up and flag_cons:
+            patterns.append({"name":"Bull Flag 🟢","type":"bullish",
+                "signal":"BULLISH CONTINUATION",
+                "detail":"Strong up move followed by tight consolidation",
+                "action":"Enter long on breakout above flag","strength":"🔥🔥"})
+
+    # Bear Flag
+    if n >= 15:
+        seg = df.tail(15)
+        first5 = seg.head(5); last10 = seg.tail(10)
+        pole_down = (first5["close"].iloc[-1]-first5["close"].iloc[0])/first5["close"].iloc[0] < -0.02
+        flag_cons = abs(last10["close"].iloc[-1]-last10["close"].iloc[0])/last10["close"].iloc[0] < 0.01
+        if pole_down and flag_cons:
+            patterns.append({"name":"Bear Flag 🔴","type":"bearish",
+                "signal":"BEARISH CONTINUATION",
+                "detail":"Strong down move followed by tight consolidation",
+                "action":"Enter short on breakdown below flag","strength":"🔥🔥"})
+
+    # Ascending Triangle
+    if n >= 20:
+        seg = df.tail(20)
+        flat_top = max(seg["high"].values)
+        rising_lows = all(seg["low"].values[i] >= seg["low"].values[i-1]*0.998
+                         for i in range(1, len(seg["low"].values)))
+        if (rising_lows and abs(seg["high"].values[-1]-flat_top)/flat_top < 0.01):
+            patterns.append({"name":"Ascending Triangle 🟢","type":"bullish",
+                "signal":"BULLISH CONTINUATION",
+                "detail":f"Flat resistance at ${flat_top:,.0f}, rising lows",
+                "action":"Wait for breakout above resistance","strength":"🔥🔥"})
+
+    # Descending Triangle
+    if n >= 20:
+        seg = df.tail(20)
+        flat_bot = min(seg["low"].values)
+        falling_highs = all(seg["high"].values[i] <= seg["high"].values[i-1]*1.002
+                           for i in range(1, len(seg["high"].values)))
+        if (falling_highs and abs(seg["low"].values[-1]-flat_bot)/flat_bot < 0.01):
+            patterns.append({"name":"Descending Triangle 🔴","type":"bearish",
+                "signal":"BEARISH CONTINUATION",
+                "detail":f"Flat support at ${flat_bot:,.0f}, falling highs",
+                "action":"Wait for breakdown below support","strength":"🔥🔥"})
+
+    # Symmetrical Triangle
+    if n >= 20:
+        seg = df.tail(20)
+        falling_highs = seg["high"].iloc[-1] < seg["high"].iloc[0]
+        rising_lows   = seg["low"].iloc[-1]  > seg["low"].iloc[0]
+        if falling_highs and rising_lows:
+            patterns.append({"name":"Symmetrical Triangle ⚪","type":"neutral",
+                "signal":"BREAKOUT PENDING",
+                "detail":"Compression — big move coming either direction",
+                "action":"Wait for breakout direction then follow","strength":"🔥🔥"})
+
+    # Rising Wedge
+    if n >= 20:
+        seg = df.tail(20)
+        h_rise = (seg["high"].iloc[-1]-seg["high"].iloc[0])/seg["high"].iloc[0]
+        l_rise = (seg["low"].iloc[-1]-seg["low"].iloc[0])/seg["low"].iloc[0]
+        if seg["high"].iloc[-1] > seg["high"].iloc[0] and seg["low"].iloc[-1] > seg["low"].iloc[0] and l_rise > h_rise*1.5:
+            patterns.append({"name":"Rising Wedge 🔴","type":"bearish",
+                "signal":"BEARISH REVERSAL",
+                "detail":"Price rising but compressing — breakdown likely",
+                "action":"Watch for break below lower trendline","strength":"🔥🔥"})
+
+    # Falling Wedge
+    if n >= 20:
+        seg = df.tail(20)
+        h_rise = (seg["high"].iloc[-1]-seg["high"].iloc[0])/seg["high"].iloc[0]
+        l_rise = (seg["low"].iloc[-1]-seg["low"].iloc[0])/seg["low"].iloc[0]
+        if seg["high"].iloc[-1] < seg["high"].iloc[0] and seg["low"].iloc[-1] < seg["low"].iloc[0] and abs(l_rise) > abs(h_rise)*1.5:
+            patterns.append({"name":"Falling Wedge 🟢","type":"bullish",
+                "signal":"BULLISH REVERSAL",
+                "detail":"Price falling but compressing — breakout likely",
+                "action":"Watch for break above upper trendline","strength":"🔥🔥"})
+
+    # Channel Up
+    if n >= 20:
+        seg = df.tail(20)
+        if (seg["high"].iloc[-1] > seg["high"].iloc[0] and
+            seg["low"].iloc[-1] > seg["low"].iloc[0]):
+            patterns.append({"name":"Channel Up 🟢","type":"bullish",
+                "signal":"BULLISH TREND",
+                "detail":"Price trending up in parallel channel",
+                "action":"Buy near channel bottom sell near top","strength":"🔥🔥"})
+
+    # Channel Down
+    if n >= 20:
+        seg = df.tail(20)
+        if (seg["high"].iloc[-1] < seg["high"].iloc[0] and
+            seg["low"].iloc[-1] < seg["low"].iloc[0]):
+            patterns.append({"name":"Channel Down 🔴","type":"bearish",
+                "signal":"BEARISH TREND",
+                "detail":"Price trending down in parallel channel",
+                "action":"Sell near channel top cover near bottom","strength":"🔥🔥"})
+
+    return patterns
+
+
 @st.cache_data(ttl=60)
 def get_data(symbol, tf, lim):
     # Try multiple methods to get data
@@ -773,30 +915,30 @@ st.markdown("**Quick Questions:**")
 qc1, qc2, qc3, qc4 = st.columns(4)
 quick_q = None
 with qc1:
-    if st.button("Should I long now? 🟢"):
+    if st.button("Should I long now? 🟢", key="btn_1"):
         quick_q = "Should I go long on this coin right now? Analyse the current SMC data and give me a clear answer."
 with qc2:
-    if st.button("Should I short now? 🔴"):
+    if st.button("Should I short now? 🔴", key="btn_2"):
         quick_q = "Should I go short on this coin right now? Analyse the current SMC data and give me a clear answer."
 with qc3:
-    if st.button("Where is my entry? 🎯"):
+    if st.button("Where is my entry? 🎯", key="btn_3"):
         quick_q = "Based on the current SMC zones, where is the best entry price for a trade? What should I wait for?"
 with qc4:
-    if st.button("Where is my SL & TP? 📏"):
+    if st.button("Where is my SL & TP? 📏", key="btn_4"):
         quick_q = "Based on the current data, where should I place my stop loss and take profit levels?"
 
 qc5, qc6, qc7, qc8 = st.columns(4)
 with qc5:
-    if st.button("What is BTC doing? 📊"):
+    if st.button("What is BTC doing? 📊", key="btn_5"):
         quick_q = "Explain what the market structure is showing right now. Is it bullish or bearish and why?"
 with qc6:
-    if st.button("Explain the OBs 📦"):
+    if st.button("Explain the OBs 📦", key="btn_6"):
         quick_q = "Explain the current Order Blocks on the chart. Which ones are important and why?"
 with qc7:
-    if st.button("Explain FVGs 🔵"):
+    if st.button("Explain FVGs 🔵", key="btn_7"):
         quick_q = "Explain the current Fair Value Gaps. What do they mean for the next price move?"
 with qc8:
-    if st.button("Liquidity levels? 💧"):
+    if st.button("Liquidity levels? 💧", key="btn_8"):
         quick_q = "Where is the liquidity sitting right now? Where might smart money push price to grab liquidity?"
 
 # Chat input
@@ -824,7 +966,7 @@ if st.session_state.chat_history:
             st.markdown(f'<div class="ai-msg-assistant">🤖 AI: {msg["content"]}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.button("🗑️ Clear Chat"):
+    if st.button("🗑️ Clear Chat", key="btn_9"):
         st.session_state.chat_history = []
         st.rerun()
 
@@ -849,6 +991,10 @@ st.caption("Checks ALL timeframes — Daily, 4H, 1H, 15m — alerts fire when 7+
 
 # ── Run checker on ALL timeframes
 all_setups = {}
+bull_count = 0
+bear_count = 0
+bvol = 0
+svol = 0
 
 # Load extra timeframes if not already loaded
 try:
@@ -1884,372 +2030,9 @@ with tab5:
     fb.update_layout(height=200,template="plotly_dark",title="BB Width — Squeeze Detector",paper_bgcolor="#050508",plot_bgcolor="#050508",margin=dict(t=30,b=10))
     st.plotly_chart(fb,use_container_width=True)
 
-    # ── VOLUME PROFILE CHART
-    st.markdown("---")
-    st.markdown("### 📊 Volume Profile")
-    st.caption("Shows volume at each price level. POC = Point of Control = most traded price = strongest level")
-
-    vp_df = calculate_volume_profile(df, bins=40)
-    if not vp_df.empty:
-        poc_price = vp_df[vp_df["is_poc"]]["price"].values[0]
-        vah = vp_df["vah"].iloc[0]
-        val = vp_df["val"].iloc[0]
-        curr = float(lat["close"])
-
-        # Volume profile chart
-        vp_fig = go.Figure()
-
-        # Value area background
-        vp_fig.add_hrect(y0=val, y1=vah,
-            fillcolor="rgba(255,215,0,0.05)",
-            line_width=0,
-            annotation_text="Value Area (70% volume)",
-            annotation_font_color="#FFD700",
-            annotation_position="top right")
-
-        # Volume bars — coloured by buy/sell
-        for _, row in vp_df.iterrows():
-            buy_pct  = row["buy_vol"]  / row["volume"] if row["volume"] > 0 else 0.5
-            sell_pct = row["sell_vol"] / row["volume"] if row["volume"] > 0 else 0.5
-            color = "#00ff88" if buy_pct > 0.55 else "#ff4444" if sell_pct > 0.55 else "#888"
-            if row["is_poc"]: color = "#FFD700"
-            vp_fig.add_shape(type="rect",
-                x0=0, x1=row["vol_pct"],
-                y0=row["level_low"], y1=row["level_high"],
-                fillcolor=color.replace("#","rgba(").replace("ff88","255,136,0,0.5)").replace("4444","68,68,0.5)").replace("D700","215,0,0.8)").replace("888","136,136,136,0.4)"),
-                line=dict(color=color, width=0.5))
-
-        # POC line
-        vp_fig.add_hline(y=poc_price, line_dash="solid",
-            line_color="#FFD700", line_width=2,
-            annotation_text=f"POC ${poc_price:,.0f}",
-            annotation_font_color="#FFD700",
-            annotation_position="right")
-
-        # VAH line
-        vp_fig.add_hline(y=vah, line_dash="dash",
-            line_color="#00bfff", line_width=1,
-            annotation_text=f"VAH ${vah:,.0f}",
-            annotation_font_color="#00bfff",
-            annotation_position="right")
-
-        # VAL line
-        vp_fig.add_hline(y=val, line_dash="dash",
-            line_color="#00bfff", line_width=1,
-            annotation_text=f"VAL ${val:,.0f}",
-            annotation_font_color="#00bfff",
-            annotation_position="right")
-
-        # Current price
-        vp_fig.add_hline(y=curr, line_dash="solid",
-            line_color="white", line_width=2,
-            annotation_text=f"Price ${curr:,.0f}",
-            annotation_font_color="white",
-            annotation_position="right")
-
-        vp_fig.update_layout(
-            height=500, template="plotly_dark",
-            paper_bgcolor="#050508", plot_bgcolor="#0a0a0f",
-            title=f"Volume Profile — {coin} {timeframe} | Yellow=POC | Blue=Value Area",
-            xaxis=dict(visible=False, range=[0, 110]),
-            yaxis=dict(title="Price", gridcolor="#0d0d18"),
-            margin=dict(t=50, b=20, l=80, r=150),
-            showlegend=False
-        )
-        st.plotly_chart(vp_fig, use_container_width=True)
-
-        # Key levels summary
-        vpc1, vpc2, vpc3, vpc4 = st.columns(4)
-        vpc1.metric("POC (Most Traded)", f"${poc_price:,.0f}",
-                    "Above ✅" if curr > poc_price else "Below ⚠️")
-        vpc2.metric("VAH (Value Area High)", f"${vah:,.0f}",
-                    "Resistance" if curr < vah else "Broken ✅")
-        vpc3.metric("VAL (Value Area Low)", f"${val:,.0f}",
-                    "Support" if curr > val else "Broken ⚠️")
-        vpc4.metric("Price vs POC", f"${curr-poc_price:+,.0f}",
-                    "Above POC" if curr > poc_price else "Below POC")
-
-        # Trading tips
-        if curr > vah:
-            st.success("✅ Price ABOVE Value Area — bullish! Look for longs on pullback to VAH")
-        elif curr < val:
-            st.error("⚠️ Price BELOW Value Area — bearish! Look for shorts on bounce to VAL")
-        elif abs(curr - poc_price) / poc_price < 0.005:
-            st.info("⚪ Price AT Point of Control — high volume node, could go either way")
-        else:
-            st.info(f"Price in Value Area — between VAL ${val:,.0f} and VAH ${vah:,.0f}")
-
-    st.markdown("---")
-
-    # ── BMA DEDICATED CHART
-    st.markdown("---")
-    st.markdown("### 🚀 Boosted Moving Average (BMA)")
-    st.caption("BMA = EMA boosted by momentum. When BMA rises FASTER than EMA = price accelerating. When BMA crosses down = momentum dying.")
-
-    lat_bma = df.iloc[-1]
-    bma_mom = lat_bma["bma_momentum"]
-    bma_color = {"strong_bull":"#00ff88","weak_bull":"#88ff88","neutral":"#888","weak_bear":"#ff8888","strong_bear":"#ff4444"}.get(bma_mom,"#888")
-    bma_label = {"strong_bull":"STRONG BULLISH MOMENTUM 🚀","weak_bull":"WEAK BULLISH MOMENTUM","neutral":"NEUTRAL","weak_bear":"WEAK BEARISH MOMENTUM","strong_bear":"STRONG BEARISH MOMENTUM 🔴"}.get(bma_mom,"NEUTRAL")
-
-    st.markdown(f"""
-    <div style="background:#0d0d1a;border:2px solid {bma_color};border-radius:10px;padding:16px;text-align:center;margin:8px 0;">
-    <b style="color:{bma_color};font-size:20px;">BMA: {bma_label}</b><br>
-    <span style="color:#aaa;font-size:13px;">
-    BMA20: ${lat_bma['bma20']:,.2f} | EMA20: ${lat_bma['ema20']:,.2f} |
-    Diff: ${lat_bma['bma20_diff']:+.2f}
-    {'| 🚀 Bull Cross!' if lat_bma['bma_bull_cross'] else '| ⚠️ Bear Cross!' if lat_bma['bma_bear_cross'] else ''}
-    </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    bma_fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.65, 0.35], vertical_spacing=0.05)
-
-    # Price + BMA lines
-    bma_fig.add_trace(go.Candlestick(
-        x=df["time"], open=df["open"], high=df["high"],
-        low=df["low"], close=df["close"], name="Price",
-        increasing_line_color="#00ff88", decreasing_line_color="#ff4444"
-    ), row=1, col=1)
-    bma_fig.add_trace(go.Scatter(x=df["time"],y=df["ema20"],name="EMA20",
-        line=dict(color="#FFD700",width=1,dash="dash")), row=1,col=1)
-    bma_fig.add_trace(go.Scatter(x=df["time"],y=df["ema50"],name="EMA50",
-        line=dict(color="#FF8C00",width=1,dash="dash")), row=1,col=1)
-    bma_fig.add_trace(go.Scatter(x=df["time"],y=df["bma20"],name="BMA20",
-        line=dict(color="#ff00ff",width=2.5)), row=1,col=1)
-    bma_fig.add_trace(go.Scatter(x=df["time"],y=df["bma50"],name="BMA50",
-        line=dict(color="#ff88ff",width=2,dash="dash")), row=1,col=1)
-
-    # BMA cross markers
-    if not bma_bc.empty:
-        bma_fig.add_trace(go.Scatter(x=bma_bc["time"],y=bma_bc["bma20"]*0.997,
-            mode="markers+text", marker=dict(symbol="triangle-up",color="#ff00ff",size=14),
-            text=["BMA BUY"]*len(bma_bc), textposition="bottom center",
-            textfont=dict(color="#ff00ff",size=10), name="BMA Bull"), row=1,col=1)
-    if not bma_brc.empty:
-        bma_fig.add_trace(go.Scatter(x=bma_brc["time"],y=bma_brc["bma20"]*1.003,
-            mode="markers+text", marker=dict(symbol="triangle-down",color="#ff4444",size=14),
-            text=["BMA SELL"]*len(bma_brc), textposition="top center",
-            textfont=dict(color="#ff4444",size=10), name="BMA Bear"), row=1,col=1)
-
-    # BMA Diff histogram — momentum strength
-    diff_colors = []
-    for v in df["bma20_diff"]:
-        if v > df["atr"].mean()*0.5:   diff_colors.append("#00ff88")
-        elif v > 0:                     diff_colors.append("#88ff88")
-        elif v > -df["atr"].mean()*0.5: diff_colors.append("#ff8888")
-        else:                           diff_colors.append("#ff4444")
-
-    bma_fig.add_trace(go.Bar(x=df["time"],y=df["bma20_diff"],name="BMA Momentum",
-        marker_color=diff_colors, opacity=0.8), row=2,col=1)
-    bma_fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3, row=2,col=1)
-
-    bma_fig.update_layout(height=600, template="plotly_dark",
-        xaxis_rangeslider_visible=False,
-        paper_bgcolor="#050508", plot_bgcolor="#050508",
-        legend=dict(orientation="h",y=1.02,font=dict(size=10)),
-        margin=dict(t=40,b=20,l=10,r=10))
-    bma_fig.update_xaxes(gridcolor="#0d0d18")
-    bma_fig.update_yaxes(gridcolor="#0d0d18")
-    bma_fig.update_yaxes(title_text="Price", row=1,col=1)
-    bma_fig.update_yaxes(title_text="Momentum", row=2,col=1)
-    st.plotly_chart(bma_fig, use_container_width=True)
-
-    st.markdown("""
-    **How to read BMA:**
-
-    | Signal | Meaning | Action |
-    |---|---|---|
-    | BMA20 rising faster than EMA20 | Momentum accelerating UP | Look for longs |
-    | BMA20 falling below EMA20 | Momentum dying | Consider exits |
-    | BMA Bull Cross (▲) | BMA20 crosses above BMA50 | Strong buy signal |
-    | BMA Bear Cross (▼) | BMA20 crosses below BMA50 | Strong sell signal |
-    | Momentum bar GREEN | Strong upward acceleration | Hold longs |
-    | Momentum bar RED | Strong downward acceleration | Hold shorts |
-
-    **BMA works best combined with:** BOS on entry TF + Liquidity sweep + Discount zone
-    """)
-
-# ── SMC TABLE
-st.markdown("---")
-st.subheader("🧱 Full SMC Table — Last 15 Candles")
-cols_show = ["time","close","structure","bos_bull","bos_bear","choch_bull","choch_bear",
-             "buy_liq","sell_liq","stop_hunt_bull","stop_hunt_bear",
-             "bull_ob","bear_ob","fvg_bull","fvg_bear",
-             "equal_highs","equal_lows","vol_spike","premium_zone","zone_pct"]
-td = df[cols_show].tail(15).copy()
-td.columns = ["Time","Close","Structure","BOS▲","BOS▼","CHoCH▲","CHoCH▼",
-              "BuyLiq","SellLiq","Hunt▲","Hunt▼",
-              "BullOB","BearOB","FVG▲","FVG▼",
-              "EQH","EQL","VolSpike","Premium","Zone%"]
-td["Time"]  = td["Time"].dt.strftime("%m/%d %H:%M")
-td["Zone%"] = td["Zone%"].round(1)
-st.dataframe(td, use_container_width=True)
-
-# ── BTC ROTATION
-if alt_coins:
-    st.markdown("---")
-    st.subheader("🔗 BTC Volume Rotation")
-    btc_df = get_data("BTC/USDT", timeframe, limit)
-    if not btc_df.empty:
-        btc_df = add_indicators(btc_df)
-        bv = btc_df["volume"]; bn = (bv-bv.min())/(bv.max()-bv.min())
-        btc_spike = bool(btc_df["vol_spike"].iloc[-1])
-        spike_ago = 0
-        for i in range(1, 6):
-            if btc_df["vol_spike"].iloc[-i]: spike_ago = i; break
-        mins_map = {"5m":5,"15m":15,"1h":60,"4h":240,"1d":1440}
-        mins = mins_map.get(timeframe, 15)
-        if btc_spike: st.success("🚨 BTC Volume Spike NOW!")
-        elif spike_ago > 0: st.warning(f"⏱ BTC spike {spike_ago} candles ago ({spike_ago*mins} mins)")
-        else: st.info("No BTC spike recently")
-        cf = go.Figure()
-        cf.add_trace(go.Scatter(x=btc_df["time"],y=bn,name="BTC",line=dict(color="#F7931A",width=2.5)))
-        rcols = st.columns(len(alt_coins))
-        for idx, alt in enumerate(alt_coins):
-            adf = get_data(alt, timeframe, limit)
-            if not adf.empty:
-                adf = add_indicators(adf)
-                av = adf["volume"]; an = (av-av.min())/(av.max()-av.min())
-                corr = float(bn.corr(an))
-                strength = "🔥 Strong" if corr>0.7 else "✅ Medium" if corr>0.4 else "⚠️ Weak"
-                alt_spike = bool(adf["vol_spike"].iloc[-1])
-                cf.add_trace(go.Scatter(x=adf["time"],y=an,name=f"{alt.replace('/USDT','')} r={corr:.2f}"))
-                with rcols[idx]:
-                    st.markdown(f"""<div class="smc-card"><b>{alt.replace('/USDT','')}</b><br>
-                    r={corr:.2f} {strength}<br>Spike: {"YES 🚀" if alt_spike else "No"}<br>
-                    Lag: ~{spike_ago*mins}m<br>${adf['close'].iloc[-1]:,.2f}</div>""", unsafe_allow_html=True)
-                if alerts_on and tg_token and tg_chat_id and alt_spike and spike_ago > 0:
-                    send_tg(tg_token, tg_chat_id, f"🔄 BTC ROTATION\n{alt} r={corr:.2f} {strength}\n${adf['close'].iloc[-1]:,.2f}")
-        cf.update_layout(height=280,template="plotly_dark",paper_bgcolor="#050508",plot_bgcolor="#050508",title="Volume Rotation (0–1)")
-        st.plotly_chart(cf,use_container_width=True)
-
-# ── RISK CALCULATOR
-st.markdown("---")
-st.subheader("⚠️ Risk Calculator")
-r1,r2,r3 = st.columns(3)
-acc = r1.number_input("Account USDT",value=100.0,step=10.0)
-rp  = r2.number_input("Risk %",value=1.0,step=0.5,min_value=0.1,max_value=5.0)
-ep  = r3.number_input("Entry Price",value=float(lat["close"]))
-slp = st.slider("Stop Loss %",0.5,5.0,float(min(max(round(lat["atr_pct"],1),0.5),5.0)),step=0.1)
-sl_p=ep*(1-slp/100); ra=acc*(rp/100); ps=ra/(ep-sl_p) if ep!=sl_p else 0
-tp1=ep*(1+slp*1.5/100); tp2=ep*(1+slp*2.5/100); tp3=ep*(1+slp*3.5/100)
-m1,m2,m3,m4,m5,m6 = st.columns(6)
-m1.metric("Risk $",f"${ra:.2f}"); m2.metric("Stop Loss",f"${sl_p:,.2f}")
-m3.metric("TP1 1.5R",f"${tp1:,.2f}",f"+${tp1-ep:,.2f}")
-m4.metric("TP2 2.5R",f"${tp2:,.2f}",f"+${tp2-ep:,.2f}")
-m5.metric("TP3 3.5R",f"${tp3:,.2f}",f"+${tp3-ep:,.2f}")
-m6.metric("Size",f"{ps:.6f}")
-st.info(f"💡 ATR SL suggestion: {lat['atr_pct']:.2f}% — matches current {coin} volatility")
-nearest_s = min(support_zones,    key=lambda x: abs(x["price"]-lat["close"])) if support_zones    else None
-nearest_r = min(resistance_zones, key=lambda x: abs(x["price"]-lat["close"])) if resistance_zones else None
-if nearest_s and nearest_r:
-    st.info(f"📏 Nearest Support: ${nearest_s['price']:,.0f} | Nearest Resistance: ${nearest_r['price']:,.0f}")
-
-# ── TELEGRAM SIGNAL
-if alerts_on and tg_token and tg_chat_id and (sc >= 8 or sc <= -8):
-    msg = (f"📊 <b>FULL SMC SIGNAL</b>\n{coin} | {timeframe}\n"
-           f"Signal: {sig}\nScore: {sc}/{max_sc}\n"
-           f"Price: ${lat['close']:,.2f}\nBias: {bias}\n"
-           f"RSI: {lat['rsi']:.1f} | ADX: {lat['adx']:.1f}\n"
-           f"{datetime.now().strftime('%H:%M')}\n\n" + "\n".join(rs[:8]))
-    send_tg(tg_token, tg_chat_id, msg)
-    st.sidebar.success("Alert sent! 📱")
-
-
-# ════════════════════════════════════════════════════════════════
-# MULTI CHART VIEW — 4 coins side by side
-# ════════════════════════════════════════════════════════════════
-st.markdown("---")
-st.subheader("🔲 Multi Chart View")
-st.caption("See 4 coins at once — quickly spot which is setting up best")
-
-mc_coins = st.multiselect("Select 4 coins to compare",
-    ["BTC/USDT","ETH/USDT","SOL/USDT","ADA/USDT","MATIC/USDT",
-     "BNB/USDT","AVAX/USDT","LINK/USDT","DOT/USDT","DOGE/USDT",
-     "XRP/USDT","INJ/USDT","SUI/USDT","ARB/USDT","OP/USDT"],
-    default=["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT"],
-    max_selections=4, key="mc_coins")
-
-mc_tf = st.selectbox("Timeframe", ["15m","1h","4h","1d"], index=2, key="mc_tf")
-
-if mc_coins:
-    mc_cols = st.columns(len(mc_coins))
-    for idx, mc_coin in enumerate(mc_coins):
-        with mc_cols[idx]:
-            try:
-                mc_df = get_data(mc_coin, mc_tf, 100)
-                if not mc_df.empty:
-                    mc_df = add_indicators(mc_df)
-                    mc_df = detect_smc(mc_df)
-                    mc_sup, mc_res = detect_sr_zones(mc_df)
-                    mc_sig, mc_css, mc_sc, _, mc_rs, mc_lat, mc_bias = full_signal(mc_df, mc_sup, mc_res)
-                    mc_pct = (mc_lat["close"] - mc_df["close"].iloc[-2]) / mc_df["close"].iloc[-2] * 100
-                    mc_color = "#00ff88" if mc_sc >= 4 else "#ff4444" if mc_sc <= -4 else "#888"
-
-                    # Mini chart
-                    mc_fig = go.Figure()
-                    mc_fig.add_trace(go.Candlestick(
-                        x=mc_df["time"].tail(50),
-                        open=mc_df["open"].tail(50),
-                        high=mc_df["high"].tail(50),
-                        low=mc_df["low"].tail(50),
-                        close=mc_df["close"].tail(50),
-                        name=mc_coin,
-                        increasing_line_color="#00ff88",
-                        decreasing_line_color="#ff4444",
-                        showlegend=False
-                    ))
-                    mc_fig.add_trace(go.Scatter(
-                        x=mc_df["time"].tail(50),
-                        y=mc_df["ema20"].tail(50),
-                        line=dict(color="#FFD700",width=1),
-                        showlegend=False
-                    ))
-                    # BOS markers
-                    mc_bos = mc_df[mc_df["bos_bull"]].tail(3)
-                    if not mc_bos.empty:
-                        mc_fig.add_trace(go.Scatter(
-                            x=mc_bos["time"], y=mc_bos["high"]*1.001,
-                            mode="markers",
-                            marker=dict(symbol="triangle-up",color="#00ff88",size=8),
-                            showlegend=False
-                        ))
-                    mc_fig.update_layout(
-                        height=200, template="plotly_dark",
-                        paper_bgcolor="#050508", plot_bgcolor="#050508",
-                        xaxis_rangeslider_visible=False,
-                        margin=dict(t=5,b=5,l=5,r=5),
-                        xaxis=dict(visible=False),
-                        yaxis=dict(gridcolor="#0d0d18",tickfont=dict(size=9))
-                    )
-                    st.plotly_chart(mc_fig, use_container_width=True)
-
-                    # Coin info
-                    st.markdown(f"""
-                    <div style="background:#0d0d1a;border:1px solid {mc_color}44;border-left:3px solid {mc_color};
-                    border-radius:6px;padding:8px;margin:2px 0;text-align:center;">
-                    <b style="color:{mc_color};">{mc_coin.replace('/USDT','')}</b>
-                    <span style="color:#aaa;font-size:12px;"> ${mc_lat['close']:,.2f}</span><br>
-                    <span style="color:{mc_color};font-size:12px;">Score: {mc_sc}/30 | {mc_bias}</span><br>
-                    <span style="color:{'#00ff88' if mc_pct>0 else '#ff4444'};font-size:12px;">{mc_pct:+.2f}%</span>
-                    <span style="color:#aaa;font-size:11px;"> RSI:{mc_lat['rsi']:.0f}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            except:
-                st.warning(f"Could not load {mc_coin}")
-
-# ── FULL COIN CORRELATION SECTION
-st.markdown("---")
-st.subheader("🔗 Full Coin Correlation Tracker")
-st.caption("See which coins follow BTC, how fast, and how strong — updated live")
-
-ALL_COINS = ["ETH/USDT","SOL/USDT","ADA/USDT","MATIC/USDT","BNB/USDT","AVAX/USDT","LINK/USDT","DOT/USDT","ATOM/USDT","NEAR/USDT","OP/USDT","ARB/USDT","DOGE/USDT","XRP/USDT","INJ/USDT","SUI/USDT"]
-MINS_MAP  = {"5m":5,"15m":15,"1h":60,"4h":240,"1d":1440}
-mins_per_candle = MINS_MAP.get(timeframe, 240)
-
-@st.cache_data(ttl=120)
 def get_correlation_data(coins, tf, lim):
+    tf_mins = {"1m":1,"3m":3,"5m":5,"15m":15,"30m":30,"1h":60,"2h":120,"4h":240,"6h":360,"12h":720,"1d":1440}
+    mins_per_candle = tf_mins.get(tf, 60)
     results = []
     btc = get_data("BTC/USDT", tf, lim)
     if btc.empty: return [], btc
@@ -2315,6 +2098,11 @@ def get_correlation_data(coins, tf, lim):
     results = sorted(results, key=lambda x: x["vol_corr"], reverse=True)
     return results, btc
 
+ALL_COINS = [
+    "BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","ADA/USDT",
+    "MATIC/USDT","AVAX/USDT","LINK/USDT","DOT/USDT","DOGE/USDT",
+    "XRP/USDT","INJ/USDT","SUI/USDT","ARB/USDT","OP/USDT","TRX/USDT"
+]
 corr_results, btc_df_main = get_correlation_data(ALL_COINS, timeframe, limit)
 
 if corr_results:
@@ -2543,7 +2331,7 @@ def scan_all_coins(coins, tf, lim):
         except: continue
     return sorted(results, key=lambda x: abs(x["score"]), reverse=True)
 
-if st.button("🔄 Scan All Coins Now"):
+if st.button("🔄 Scan All Coins Now", key="btn_10"):
     st.cache_data.clear()
 
 scan_results = scan_all_coins(SCAN_COINS, timeframe, limit)
@@ -2802,7 +2590,7 @@ with st.expander("➕ Log A New Trade", expanded=False):
     j_tf      = jc8.selectbox("Timeframe Used", ["15m","1h","4h","1d"], key="j_tf")
     j_notes   = st.text_area("Notes / What I Learned", placeholder="Why did I take this trade? What happened? What would I do differently?", key="j_notes")
 
-    if st.button("💾 Save Trade"):
+    if st.button("💾 Save Trade", key="btn_11"):
         if j_entry > 0 and j_exit > 0:
             pnl = (j_exit - j_entry) / j_entry * 100 if j_dir == "LONG" else (j_entry - j_exit) / j_entry * 100
             pnl_usdt = j_size * (pnl / 100)
@@ -2888,7 +2676,7 @@ if st.session_state.journal:
     jdf_display.columns = ["Date","Coin","Dir","Entry","Exit","Result","P&L%","P&L$","Signal","TF"]
     st.dataframe(jdf_display, use_container_width=True, hide_index=True)
 
-    if st.button("🗑️ Clear Journal"):
+    if st.button("🗑️ Clear Journal", key="btn_12"):
         st.session_state.journal = []
         st.rerun()
 else:
@@ -2925,7 +2713,7 @@ if st.session_state.paper_position is None:
     p_sl     = st.number_input("Stop Loss Price", value=round(current_price * 0.98, 2), key="p_sl")
     p_tp     = st.number_input("Take Profit Price", value=round(current_price * 1.03, 2), key="p_tp")
 
-    if st.button("📈 Open Paper Trade"):
+    if st.button("📈 Open Paper Trade", key="btn_13"):
         lev_val = int(p_lev.replace("x",""))
         st.session_state.paper_position = {
             "coin":    coin, "dir": p_dir, "entry": current_price,
@@ -2964,7 +2752,7 @@ else:
     elif tp_hit:
         st.success("🟢 TAKE PROFIT HIT!")
 
-    if st.button("❌ Close Paper Trade"):
+    if st.button("❌ Close Paper Trade", key="btn_14"):
         new_balance = st.session_state.paper_balance + pnl_usdt
         result = "WIN" if pnl_usdt > 0 else "LOSS"
         st.session_state.paper_trades.append({
@@ -2993,7 +2781,7 @@ if st.session_state.paper_trades:
                f"${st.session_state.paper_balance-1000:.2f}")
     st.dataframe(ptdf[["date","coin","dir","entry","exit","pnl_pct","pnl_usdt","result","leverage"]],
                  use_container_width=True, hide_index=True)
-    if st.button("🔄 Reset Paper Account"):
+    if st.button("🔄 Reset Paper Account", key="btn_15"):
         st.session_state.paper_balance  = 1000.0
         st.session_state.paper_trades   = []
         st.session_state.paper_position = None
@@ -3010,7 +2798,1556 @@ bt_col1, bt_col2 = st.columns(2)
 bt_signal = bt_col1.selectbox("Signal To Test", ["BOS Bullish","CHoCH Bullish","Buy Liquidity Sweep","Volume Spike + BOS"])
 bt_hold   = bt_col2.selectbox("Hold For (candles)", [1, 2, 3, 5, 10])
 
-if st.button("▶️ Run Backtest"):
+if st.button("▶️ Run Backtest", key="btn_16"):
+    with st.spinner("Running backtest on historical data..."):
+        bt_results = []
+        for i in range(10, len(df) - bt_hold):
+            row     = df.iloc[i]
+            future  = df.iloc[i + bt_hold]
+            triggered = False
+
+            if bt_signal == "BOS Bullish"            and row["bos_bull"]:   triggered = True
+            elif bt_signal == "CHoCH Bullish"         and row["choch_bull"]: triggered = True
+            elif bt_signal == "Buy Liquidity Sweep"   and row["buy_liq"]:   triggered = True
+            elif bt_signal == "Volume Spike + BOS"    and row["bos_bull"] and row["vol_spike"]: triggered = True
+
+            if triggered:
+                entry  = row["close"]
+                exit_p = future["close"]
+                pnl    = (exit_p - entry) / entry * 100
+                bt_results.append({
+                    "time":   row["time"].strftime("%m/%d %H:%M"),
+                    "entry":  round(entry, 2),
+                    "exit":   round(exit_p, 2),
+                    "pnl%":   round(pnl, 2),
+                    "result": "WIN" if pnl > 0 else "LOSS"
+                })
+
+        if bt_results:
+            btdf    = pd.DataFrame(bt_results)
+            bt_wins = len(btdf[btdf["result"]=="WIN"])
+            bt_wr   = bt_wins / len(btdf) * 100
+            bt_avg  = btdf["pnl%"].mean()
+            bt_tot  = btdf["pnl%"].sum()
+
+            bc1, bc2, bc3, bc4 = st.columns(4)
+            bc1.metric("Signals Found",  len(btdf))
+            bc2.metric("Win Rate",       f"{bt_wr:.1f}%")
+            bc3.metric("Avg P&L",        f"{bt_avg:.2f}%")
+            bc4.metric("Total Return",   f"{bt_tot:.2f}%",
+                       "✅ Profitable" if bt_tot > 0 else "❌ Losing")
+
+            # P&L distribution
+            bt_fig = go.Figure()
+            bt_fig.add_trace(go.Bar(
+                x=btdf["time"], y=btdf["pnl%"],
+                marker_color=["#00ff88" if p > 0 else "#ff4444" for p in btdf["pnl%"]],
+                name="P&L %"
+            ))
+            bt_fig.add_hline(y=0, line_color="white", line_width=1, opacity=0.3)
+            bt_fig.update_layout(height=250, template="plotly_dark",
+                paper_bgcolor="#050508", plot_bgcolor="#050508",
+                title=f"Backtest Results — {bt_signal} | Hold {bt_hold} candles",
+                margin=dict(t=30, b=20))
+            st.plotly_chart(bt_fig, use_container_width=True)
+            st.dataframe(btdf, use_container_width=True, hide_index=True)
+
+            if bt_wr >= 55:
+                st.success(f"✅ Signal '{bt_signal}' has a {bt_wr:.1f}% win rate on {timeframe} — worth using!")
+            elif bt_wr >= 45:
+                st.warning(f"⚠️ Signal '{bt_signal}' has {bt_wr:.1f}% win rate — acceptable with good R:R")
+            else:
+                st.error(f"❌ Signal '{bt_signal}' has only {bt_wr:.1f}% win rate on {timeframe} — use with caution")
+        else:
+            st.warning("No signals found in this data range. Try a different signal or increase candles.")
+
+
+# ════════════════════════════════════════════════════════════════
+# ── MARKET CORRELATIONS
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("🌍 Market Correlations & Sentiment")
+st.caption("Key external data that moves crypto markets — check these every day")
+
+# ── FEAR & GREED
+@st.cache_data(ttl=3600)
+def get_fear_greed():
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=30", timeout=10)
+        data = r.json()
+        return data.get("data", [])
+    except:
+        return []
+
+# ── FUNDING RATES
+@st.cache_data(ttl=300)
+def get_funding_rates():
+    try:
+        exchange = ccxt.binance()
+        coins = ["BTC/USDT:USDT","ETH/USDT:USDT","SOL/USDT:USDT","ADA/USDT:USDT"]
+        results = []
+        for c in coins:
+            try:
+                info = exchange.fetch_funding_rate(c)
+                results.append({
+                    "coin": c.split("/")[0],
+                    "rate": float(info.get("fundingRate", 0)) * 100,
+                    "next": str(info.get("fundingDatetime",""))[:16]
+                })
+            except:
+                continue
+        return results
+    except:
+        return []
+
+# ── OPEN INTEREST
+@st.cache_data(ttl=300)
+def get_open_interest():
+    results = []
+    coins = ["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","ADAUSDT"]
+    for c in coins:
+        try:
+            url = f"https://fapi.binance.com/fapi/v1/openInterest?symbol={c}"
+            r = requests.get(url, timeout=10)
+            data = r.json()
+            oi_qty = float(data.get("openInterest", 0))
+            # Get current price to calculate USD value
+            url2 = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={c}"
+            r2 = requests.get(url2, timeout=10)
+            price = float(r2.json().get("price", 0))
+            oi_usdt = oi_qty * price
+            results.append({
+                "coin": c.replace("USDT",""),
+                "oi": oi_qty,
+                "oi_usdt": oi_usdt
+            })
+        except:
+            continue
+    return results
+
+# ── BTC DOMINANCE
+@st.cache_data(ttl=3600)
+def get_btc_dominance():
+    try:
+        r = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        data = r.json().get("data", {})
+        dom  = data.get("market_cap_percentage", {})
+        return {
+            "btc":  round(dom.get("btc", 0), 2),
+            "eth":  round(dom.get("eth", 0), 2),
+            "others": round(100 - dom.get("btc", 0) - dom.get("eth", 0), 2),
+            "total_mcap": data.get("total_market_cap", {}).get("usd", 0),
+            "total_volume": data.get("total_volume", {}).get("usd", 0),
+            "mcap_change": data.get("market_cap_change_percentage_24h_usd", 0)
+        }
+    except:
+        return {}
+
+with st.spinner("Loading market data..."):
+    fg_data   = get_fear_greed()
+    fr_data   = get_funding_rates()
+    oi_data   = get_open_interest()
+    dom_data  = get_btc_dominance()
+
+# ── ROW 1: FEAR & GREED + BTC DOMINANCE
+fgc1, fgc2 = st.columns(2)
+
+with fgc1:
+    st.markdown("### 😱 Fear & Greed Index")
+    if fg_data:
+        current_fg    = fg_data[0]
+        fg_value      = int(current_fg["value"])
+        fg_class      = current_fg["value_classification"]
+        fg_date       = current_fg["timestamp"]
+
+        # Color based on value
+        if fg_value <= 25:   fg_color, fg_emoji = "#ff4444", "😱 Extreme Fear"
+        elif fg_value <= 45: fg_color, fg_emoji = "#ff8800", "😰 Fear"
+        elif fg_value <= 55: fg_color, fg_emoji = "#FFD700", "😐 Neutral"
+        elif fg_value <= 75: fg_color, fg_emoji = "#00cc66", "😊 Greed"
+        else:                fg_color, fg_emoji = "#00ff88", "🤑 Extreme Greed"
+
+        st.markdown(f"""
+        <div style="background:#0d0d1a;border:1px solid {fg_color}44;border-radius:12px;padding:20px;text-align:center;">
+        <div style="font-size:60px;font-weight:900;color:{fg_color};">{fg_value}</div>
+        <div style="font-size:20px;color:{fg_color};font-weight:700;">{fg_emoji}</div>
+        <div style="color:#888;font-size:13px;margin-top:8px;">Updated daily</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(" ")
+
+        # Trading interpretation
+        if fg_value <= 25:
+            st.success("💡 Extreme Fear = GOOD TIME TO BUY — everyone is scared, smart money accumulates")
+        elif fg_value <= 45:
+            st.info("💡 Fear = Possible buy opportunity — market is cautious")
+        elif fg_value <= 55:
+            st.info("💡 Neutral — no strong signal from sentiment")
+        elif fg_value <= 75:
+            st.warning("💡 Greed = Be careful — market getting overheated")
+        else:
+            st.error("💡 Extreme Greed = CONSIDER SELLING — everyone is euphoric, top may be near")
+
+        # 30 day chart
+        if len(fg_data) >= 7:
+            fg_vals  = [int(d["value"]) for d in reversed(fg_data[:30])]
+            fg_dates = [datetime.fromtimestamp(int(d["timestamp"])).strftime("%m/%d") for d in reversed(fg_data[:30])]
+            fg_colors = ["#ff4444" if v <= 25 else "#ff8800" if v <= 45 else "#FFD700" if v <= 55 else "#00cc66" if v <= 75 else "#00ff88" for v in fg_vals]
+            fg_fig = go.Figure()
+            fg_fig.add_trace(go.Bar(x=fg_dates, y=fg_vals, marker_color=fg_colors, name="Fear & Greed"))
+            fg_fig.add_hline(y=25, line_dash="dash", line_color="red",   opacity=0.5, annotation_text="Extreme Fear")
+            fg_fig.add_hline(y=75, line_dash="dash", line_color="green", opacity=0.5, annotation_text="Extreme Greed")
+            fg_fig.add_hline(y=50, line_dash="dot",  line_color="white", opacity=0.2)
+            fg_fig.update_layout(height=200, template="plotly_dark",
+                paper_bgcolor="#050508", plot_bgcolor="#050508",
+                title="30 Day Fear & Greed History",
+                margin=dict(t=30, b=20), showlegend=False)
+            st.plotly_chart(fg_fig, use_container_width=True)
+    else:
+        st.warning("Could not load Fear & Greed data")
+
+with fgc2:
+    st.markdown("### 👑 BTC Dominance")
+    if dom_data:
+        btc_dom = dom_data.get("btc", 0)
+        eth_dom = dom_data.get("eth", 0)
+        oth_dom = dom_data.get("others", 0)
+        total_mcap = dom_data.get("total_mcap", 0)
+        mcap_chg   = dom_data.get("mcap_change", 0)
+
+        dc1, dc2, dc3 = st.columns(3)
+        dc1.metric("BTC Dom",   f"{btc_dom}%",  "↑ Alts bleeding" if btc_dom > 50 else "↓ Alt season")
+        dc2.metric("ETH Dom",   f"{eth_dom}%")
+        dc3.metric("Total MCap",f"${total_mcap/1e12:.2f}T", f"{mcap_chg:.2f}%")
+
+        # Dominance interpretation
+        if btc_dom > 55:
+            st.warning(f"⚠️ BTC Dominance HIGH at {btc_dom}% — money in BTC, altcoins struggling")
+        elif btc_dom > 48:
+            st.info(f"ℹ️ BTC Dominance NEUTRAL at {btc_dom}% — balanced market")
+        else:
+            st.success(f"✅ BTC Dominance LOW at {btc_dom}% — altcoin season possible!")
+
+        # Pie chart
+        dom_fig = go.Figure(go.Pie(
+            labels=["BTC", "ETH", "Others"],
+            values=[btc_dom, eth_dom, oth_dom],
+            marker_colors=["#F7931A", "#627EEA", "#888888"],
+            hole=0.4,
+            textinfo="label+percent"
+        ))
+        dom_fig.update_layout(
+            height=250, template="plotly_dark",
+            paper_bgcolor="#050508",
+            title="Market Cap Distribution",
+            margin=dict(t=40, b=20),
+            showlegend=False
+        )
+        st.plotly_chart(dom_fig, use_container_width=True)
+
+        # Alt season signal
+        st.markdown(f"""
+        <div style="background:#0d0d1a;border:1px solid #F7931A44;border-radius:8px;padding:12px;">
+        <b style="color:#F7931A;">Altcoin Season Signal:</b><br>
+        {'🟢 BTC dom falling = Alt season starting — rotate into SOL, ETH, ADA' if btc_dom < 48 else
+         '🔴 BTC dom rising = Stay in BTC or stable — altcoins losing value' if btc_dom > 52 else
+         '⚪ Neutral — watch BTC.D direction on TradingView'}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("Could not load dominance data")
+
+st.markdown("---")
+
+# ── ROW 2: FUNDING RATES + OPEN INTEREST
+fc1, fc2 = st.columns(2)
+
+with fc1:
+    st.markdown("### 💰 Funding Rates")
+    st.caption("Positive = longs paying shorts. Negative = shorts paying longs.")
+    if fr_data:
+        for r in fr_data:
+            rate = r["rate"]
+            if rate > 0.05:    rc, emoji, msg = "#ff4444", "🔴", "Very high — longs overloaded, DROP likely"
+            elif rate > 0.01:  rc, emoji, msg = "#ff8800", "🟠", "High — market leaning long, be careful"
+            elif rate > 0:     rc, emoji, msg = "#00ff88", "🟢", "Healthy — slight long bias, normal"
+            elif rate > -0.01: rc, emoji, msg = "#00bfff", "🔵", "Slightly negative — slight short bias"
+            else:              rc, emoji, msg = "#bf00ff", "🟣", "Very negative — shorts overloaded, PUMP likely"
+
+            st.markdown(f"""
+            <div style="background:#0d0d1a;border:1px solid {rc}44;border-left:3px solid {rc};
+            border-radius:8px;padding:10px;margin:4px 0;">
+            <b style="color:{rc};">{emoji} {r['coin']}</b>
+            <span style="float:right;color:{rc};font-weight:700;">{rate:.4f}%</span><br>
+            <span style="color:#888;font-size:12px;">{msg}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(" ")
+        st.info("💡 Extreme positive funding = market too bullish = price may drop soon\n\nExtreme negative funding = market too bearish = price may pump soon")
+    else:
+        st.warning("Could not load funding rates")
+
+with fc2:
+    st.markdown("### 📊 Open Interest")
+    st.caption("Total value of open futures contracts — shows market conviction")
+    if oi_data:
+        for r in oi_data:
+            oi_val = r["oi_usdt"]
+            st.markdown(f"""
+            <div style="background:#0d0d1a;border:1px solid #00bfff33;border-left:3px solid #00bfff;
+            border-radius:8px;padding:10px;margin:4px 0;">
+            <b style="color:#00bfff;">{r['coin']}</b>
+            <span style="float:right;color:#FFD700;font-weight:700;">${oi_val/1e9:.2f}B</span><br>
+            <span style="color:#888;font-size:12px;">{r['oi']:,.0f} contracts open</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(" ")
+        st.markdown("""
+        <div style="background:#0d0d1a;border:1px solid #FFD70033;border-radius:8px;padding:12px;">
+        <b style="color:#FFD700;">How To Read Open Interest:</b><br>
+        <span style="color:#00ff88;">Price UP + OI UP = Strong bull trend ✅</span><br>
+        <span style="color:#ff8800;">Price UP + OI DOWN = Weak move, reversal possible ⚠️</span><br>
+        <span style="color:#ff4444;">Price DOWN + OI UP = Strong bear trend 🔴</span><br>
+        <span style="color:#00bfff;">Price DOWN + OI DOWN = Shorts closing, bounce coming ✅</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("Could not load open interest data")
+
+st.markdown("---")
+
+# ── ROW 3: COMBINED MARKET SIGNAL
+st.markdown("### 🎯 Combined Market Signal")
+st.caption("All correlations combined into one overall market reading")
+
+if fg_data and dom_data:
+    fg_val  = int(fg_data[0]["value"])
+    btc_dom = dom_data.get("btc", 50)
+
+    bull_points = 0
+    bear_points = 0
+    signals     = []
+
+    # Fear & Greed
+    if fg_val <= 30:
+        bull_points += 2
+        signals.append("😱 Extreme Fear — historically good buy zone ✅")
+    elif fg_val >= 75:
+        bear_points += 2
+        signals.append("🤑 Extreme Greed — historically good sell zone ⚠️")
+
+    # BTC Dominance
+    if btc_dom < 45:
+        bull_points += 1
+        signals.append("👑 Low BTC dominance — altcoin season possible ✅")
+    elif btc_dom > 55:
+        bear_points += 1
+        signals.append("👑 High BTC dominance — alts struggling ⚠️")
+
+    # Funding rates
+    if fr_data:
+        avg_rate = sum(r["rate"] for r in fr_data) / len(fr_data)
+        if avg_rate < -0.01:
+            bull_points += 2
+            signals.append("💰 Negative funding — shorts overloaded, pump likely ✅")
+        elif avg_rate > 0.05:
+            bear_points += 2
+            signals.append("💰 Very high funding — longs overloaded, drop likely ⚠️")
+
+    # Dashboard signal
+    if sc >= 4:
+        bull_points += 2
+        signals.append(f"📊 Dashboard signal BULLISH score {sc}/30 ✅")
+    elif sc <= -4:
+        bear_points += 2
+        signals.append(f"📊 Dashboard signal BEARISH score {sc}/30 ⚠️")
+
+    total_pts = bull_points + bear_points
+    if total_pts > 0:
+        bull_pct = bull_points / total_pts * 100
+    else:
+        bull_pct = 50
+
+    if bull_points > bear_points + 1:
+        overall = "BULLISH CONFLUENCE 🟢"
+        oc = "#00ff88"
+    elif bear_points > bull_points + 1:
+        overall = "BEARISH CONFLUENCE 🔴"
+        oc = "#ff4444"
+    else:
+        overall = "MIXED — WAIT FOR CLARITY ⚪"
+        oc = "#888888"
+
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:2px solid {oc};border-radius:12px;padding:20px;text-align:center;margin:10px 0;">
+    <div style="font-size:24px;font-weight:700;color:{oc};">{overall}</div>
+    <div style="color:#aaa;font-size:14px;margin-top:8px;">
+    Bullish factors: {bull_points} | Bearish factors: {bear_points}
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Progress bar
+    st.markdown(f"**Market Bias: {bull_pct:.0f}% Bullish**")
+    st.progress(int(bull_pct) / 100)
+
+    # All signals
+    st.markdown("**All Confluence Factors:**")
+    for s in signals:
+        if "✅" in s: st.success(s)
+        elif "⚠️" in s: st.error(s)
+        else: st.info(s)
+
+st.markdown("---")
+
+# ── USEFUL LINKS
+st.subheader("🔗 Useful Daily Resources")
+lc1, lc2, lc3, lc4 = st.columns(4)
+with lc1:
+    st.markdown("""
+    **📊 Market Data**
+    - [Fear & Greed](https://alternative.me/crypto/fear-and-greed-index/)
+    - [CoinGlass](https://coinglass.com)
+    - [TradingView](https://tradingview.com)
+    - [CoinMarketCap](https://coinmarketcap.com)
+    """)
+with lc2:
+    st.markdown("""
+    **📰 News**
+    - [CoinDesk](https://coindesk.com)
+    - [CoinTelegraph](https://cointelegraph.com)
+    - [CryptoPanic](https://cryptopanic.com)
+    - [The Block](https://theblock.co)
+    """)
+with lc3:
+    st.markdown("""
+    **🐋 Whale Tracking**
+    - [Whale Alert](https://whale-alert.io)
+    - [Glassnode](https://glassnode.com)
+    - [CryptoQuant](https://cryptoquant.com)
+    - [Santiment](https://santiment.net)
+    """)
+with lc4:
+    st.markdown("""
+    **📈 Futures Data**
+    - [Coinglass OI](https://coinglass.com/OpenInterest)
+    - [Coinglass FR](https://coinglass.com/FundingRate)
+    - [Bybt](https://bybt.com)
+    - [Binance Futures](https://binance.com/futures)
+    """)
+
+st.markdown("---")
+st.subheader("📖 Order Book Analysis")
+st.caption("Live order book — see whale orders, buy/sell walls, and market pressure")
+
+ob_symbol = coin.replace("/USDT","") + "USDT"
+
+@st.cache_data(ttl=15)
+def get_ob(symbol):
+    try:
+        url = f"https://api.binance.com/api/v3/depth?symbol={symbol}&limit=100"
+        r = requests.get(url, timeout=10)
+        d = r.json()
+        return {"bids":[[float(p),float(q)] for p,q in d.get("bids",[])],
+                "asks":[[float(p),float(q)] for p,q in d.get("asks",[])]}
+    except: return {}
+
+@st.cache_data(ttl=15)
+def get_trades(symbol):
+    try:
+        url = f"https://api.binance.com/api/v3/trades?symbol={symbol}&limit=500"
+        r = requests.get(url, timeout=10)
+        rows = [{"price":float(t["price"]),"qty":float(t["qty"]),
+                 "value":float(t["price"])*float(t["qty"]),
+                 "is_buyer":not t["isBuyerMaker"],
+                 "time":pd.to_datetime(t["time"],unit="ms")} for t in r.json()]
+        return pd.DataFrame(rows)
+    except: return pd.DataFrame()
+
+with st.spinner("Loading order book..."):
+    ob  = get_ob(ob_symbol)
+    tdf = get_trades(ob_symbol)
+
+if ob and "bids" in ob and "asks" in ob and len(ob["bids"]) > 0 and len(ob["asks"]) > 0:
+    bids = ob["bids"][:50]; asks = ob["asks"][:50]
+    if not bids or not asks:
+        st.warning("Order book empty — Binance may restrict this region")
+        bids = []; asks = []
+    else:
+        bp = [b[0] for b in bids]; bq = [b[1] for b in bids]
+        ap = [a[0] for a in asks]; aq = [a[1] for a in asks]
+        mid = (bp[0]+ap[0])/2 if bp and ap else 0
+    tbv = sum(p*q for p,q in bids); tav = sum(p*q for p,q in asks)
+    tv  = tbv+tav
+    bpct = tbv/tv*100 if tv>0 else 50; apct = tav/tv*100 if tv>0 else 50
+    imb  = bpct - apct
+
+    m1,m2,m3,m4,m5 = st.columns(5)
+    m1.metric("Mid Price", f"${mid:,.2f}")
+    m2.metric("Bid Vol",   f"${tbv/1e6:.2f}M", f"{bpct:.1f}%")
+    m3.metric("Ask Vol",   f"${tav/1e6:.2f}M", f"{apct:.1f}%")
+    m4.metric("Spread",    f"${ap[0]-bp[0]:.2f}")
+    m5.metric("Imbalance", f"{imb:+.1f}%", "Buy pres" if imb>5 else "Sell pres" if imb<-5 else "Neutral")
+
+    if imb>10:    st.success(f"Strong buy pressure! Bids dominating {imb:.1f}%")
+    elif imb>5:   st.info(f"Moderate buy pressure {imb:.1f}%")
+    elif imb<-10: st.error(f"Strong sell pressure! Asks dominating {abs(imb):.1f}%")
+    elif imb<-5:  st.warning(f"Moderate sell pressure {abs(imb):.1f}%")
+
+    st.markdown("---")
+    st.markdown("### 📊 Order Book Depth Chart")
+    cb=[]; r2=0
+    for q in bq: r2+=q; cb.append(r2)
+    ca=[]; r2=0
+    for q in aq: r2+=q; ca.append(r2)
+    df2=go.Figure()
+    df2.add_trace(go.Scatter(x=bp,y=cb,name="Bids",fill="tozeroy",line=dict(color="#00ff88",width=2),fillcolor="rgba(0,255,136,0.15)"))
+    df2.add_trace(go.Scatter(x=ap,y=ca,name="Asks",fill="tozeroy",line=dict(color="#ff4444",width=2),fillcolor="rgba(255,68,68,0.15)"))
+    df2.add_vline(x=mid,line_dash="dash",line_color="white",line_width=2,annotation_text=f"${mid:,.0f}",annotation_font_color="white")
+    df2.update_layout(height=320,template="plotly_dark",paper_bgcolor="#050508",plot_bgcolor="#050508",
+        title="Cumulative Depth — Green=Buys Red=Sells",xaxis_title="Price",yaxis_title="Cum Qty",margin=dict(t=40,b=30,l=10,r=10))
+    df2.update_xaxes(gridcolor="#0d0d18"); df2.update_yaxes(gridcolor="#0d0d18")
+    st.plotly_chart(df2,use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### 🐋 Whale Order Walls")
+    bu = sorted([(p,q,p*q) for p,q in bids],key=lambda x:x[2],reverse=True)[:8]
+    au = sorted([(p,q,p*q) for p,q in asks],key=lambda x:x[2],reverse=True)[:8]
+    wc1,wc2 = st.columns(2)
+    with wc1:
+        st.markdown("**Buy Walls — price may bounce UP here**")
+        for i,(p,q,u) in enumerate(bu):
+            bar=int(u/bu[0][2]*100); em="🐋🐋🐋" if i==0 else "🐋🐋" if i<3 else "🐋"
+            dist=(mid-p)/mid*100
+            st.markdown(f"**${p:,.2f}** {em} — ${u/1e3:.1f}K | -{dist:.2f}% below price")
+    with wc2:
+        st.markdown("**Sell Walls — price may reverse DOWN here**")
+        for i,(p,q,u) in enumerate(au):
+            bar=int(u/au[0][2]*100); em="🐋🐋🐋" if i==0 else "🐋🐋" if i<3 else "🐋"
+            dist=(p-mid)/mid*100
+            st.markdown(f"**${p:,.2f}** {em} — ${u/1e3:.1f}K | +{dist:.2f}% above price")
+
+    if not tdf.empty:
+        st.markdown("---")
+        st.markdown("### 💹 Cumulative Delta")
+        tdf["delta"]     = tdf.apply(lambda x: x["value"] if x["is_buyer"] else -x["value"],axis=1)
+        tdf["cum_delta"] = tdf["delta"].cumsum()
+        bvol = tdf[tdf["is_buyer"]]["value"].sum()
+        svol = tdf[~tdf["is_buyer"]]["value"].sum()
+        tv2  = bvol+svol; bpct2 = bvol/tv2*100 if tv2>0 else 50
+
+        dc1,dc2,dc3 = st.columns(3)
+        dc1.metric("Buy Vol",  f"${bvol/1e3:.1f}K", f"{bpct2:.1f}%")
+        dc2.metric("Sell Vol", f"${svol/1e3:.1f}K", f"{100-bpct2:.1f}%")
+        dc3.metric("Delta",    f"${(bvol-svol)/1e3:+.1f}K","Buyers winning" if bvol>svol else "Sellers winning")
+
+        dfig = make_subplots(rows=2,cols=1,shared_xaxes=True,row_heights=[0.5,0.5],vertical_spacing=0.05)
+        dfig.add_trace(go.Scatter(x=tdf["time"],y=tdf["price"],name="Price",line=dict(color="#aaa",width=1)),row=1,col=1)
+        dfig.add_trace(go.Scatter(x=tdf["time"],y=tdf["cum_delta"],name="Cum Delta",fill="tozeroy",
+            line=dict(color="#00bfff",width=1.5),fillcolor="rgba(0,191,255,0.08)"),row=2,col=1)
+        dfig.add_hline(y=0,line_dash="dash",line_color="white",opacity=0.3,row=2,col=1)
+        dfig.update_layout(height=300,template="plotly_dark",paper_bgcolor="#050508",plot_bgcolor="#050508",
+            title="Price + Cumulative Delta — Rising = more buying",margin=dict(t=40,b=20,l=10,r=10))
+        dfig.update_xaxes(gridcolor="#0d0d18"); dfig.update_yaxes(gridcolor="#0d0d18")
+        st.plotly_chart(dfig,use_container_width=True)
+
+        st.markdown("**Large Trades >$10K:**")
+        lg = tdf[tdf["value"]>=10000].tail(15)
+        if not lg.empty:
+            for _,t in lg.iterrows():
+                dr = "BUY" if t["is_buyer"] else "SELL"
+                cl = "#00ff88" if t["is_buyer"] else "#ff4444"
+                em = "🐋🐋🐋" if t["value"]>100000 else "🐋🐋" if t["value"]>50000 else "🐋"
+                st.markdown(f"<span style='color:{cl};font-weight:700;'>{dr}</span> ${t['value']/1e3:.1f}K @ ${t['price']:,.2f} — {t['time'].strftime('%H:%M:%S')} {em}",unsafe_allow_html=True)
+            if alerts_on and tg_token and tg_chat_id:
+                for _,t in tdf[tdf["value"]>=100000].tail(2).iterrows():
+                    send_tg(tg_token,tg_chat_id,f"🐋 WHALE TRADE\n{coin} {'BUY' if t['is_buyer'] else 'SELL'}\n${t['value']/1e3:.0f}K @ ${t['price']:,.2f}")
+        else:
+            st.info("No large trades in last 500 trades")
+
+    st.markdown("---")
+    st.markdown("### 🎯 Order Book Signal")
+    obs=0; obr=[]
+    if imb>10:    obs+=2; obr.append("Strong bid dominance ✅")
+    elif imb>5:   obs+=1; obr.append("Moderate bid dominance ✅")
+    elif imb<-10: obs-=2; obr.append("Strong ask dominance ⚠️")
+    elif imb<-5:  obs-=1; obr.append("Moderate ask dominance ⚠️")
+    if bu and abs(mid-bu[0][0])/mid<0.005: obs+=2; obr.append(f"Near biggest buy wall ${bu[0][0]:,.0f} ✅")
+    if au and abs(mid-au[0][0])/mid<0.005: obs-=2; obr.append(f"Near biggest sell wall ${au[0][0]:,.0f} ⚠️")
+    if not tdf.empty:
+        if bvol>svol*1.3: obs+=1; obr.append("Buyers winning recent trades ✅")
+        elif svol>bvol*1.3: obs-=1; obr.append("Sellers winning recent trades ⚠️")
+    if obs>=2:   oss,osc="ORDER BOOK BULLISH 🟢","bull-signal"
+    elif obs<=-2: oss,osc="ORDER BOOK BEARISH 🔴","bear-signal"
+    else:         oss,osc="ORDER BOOK NEUTRAL ⚪","neutral-signal"
+    st.markdown(f'<div class="signal-master {osc}">{oss} | Score: {obs}</div>',unsafe_allow_html=True)
+    oc1,oc2=st.columns(2)
+    with oc1:
+        st.markdown("**Bullish:**")
+        for r in obr:
+            if "✅" in r: st.success(r)
+    with oc2:
+        st.markdown("**Bearish:**")
+        for r in obr:
+            if "⚠️" in r: st.error(r)
+    if bu and au:
+        st.info(f"Biggest Buy Wall: ${bu[0][0]:,.2f} (${bu[0][2]/1e3:.0f}K) | Biggest Sell Wall: ${au[0][0]:,.2f} (${au[0][2]/1e3:.0f}K)")
+else:
+    st.warning("Could not load order book. Check internet connection.")
+
+# ════════════════════════════════════════════════════════════════
+# LIQUIDATION LEVEL ESTIMATOR
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("💥 Liquidation Level Estimator")
+st.caption("Estimates where leveraged traders will get liquidated — price is magnetic to these levels (similar to CoinGlass heatmap)")
+
+@st.cache_data(ttl=60)
+def get_liquidation_data(symbol):
+    try:
+        # Get funding rate history
+        url_fr = f"https://fapi.binance.com/fapi/v1/fundingRate?symbol={symbol}&limit=100"
+        r_fr = requests.get(url_fr, timeout=10)
+        fr_data = r_fr.json()
+
+        # Get open interest history
+        url_oi = f"https://fapi.binance.com/futures/data/openInterestHist?symbol={symbol}&period=1h&limit=48"
+        r_oi = requests.get(url_oi, timeout=10)
+        oi_data = r_oi.json()
+
+        # Get mark price klines for price range
+        url_mk = f"https://fapi.binance.com/fapi/v1/markPriceKlines?symbol={symbol}&interval=1h&limit=48"
+        r_mk = requests.get(url_mk, timeout=10)
+        mk_data = r_mk.json()
+
+        return fr_data, oi_data, mk_data
+    except Exception as e:
+        return [], [], []
+
+@st.cache_data(ttl=30)
+def get_long_short_ratio(symbol):
+    try:
+        url = f"https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol={symbol}&period=1h&limit=24"
+        r = requests.get(url, timeout=10)
+        return r.json()
+    except:
+        return []
+
+@st.cache_data(ttl=30)
+def get_top_trader_ratio(symbol):
+    try:
+        url = f"https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol={symbol}&period=1h&limit=24"
+        r = requests.get(url, timeout=10)
+        return r.json()
+    except:
+        return []
+
+futures_symbol = coin.replace("/USDT","") + "USDT"
+
+with st.spinner("Loading liquidation data..."):
+    fr_data, oi_data, mk_data = get_liquidation_data(futures_symbol)
+    ls_ratio  = get_long_short_ratio(futures_symbol)
+    top_ratio = get_top_trader_ratio(futures_symbol)
+
+# Current price
+curr_price = float(lat["close"])
+
+# ── LONG SHORT RATIO
+st.markdown("### ⚖️ Long/Short Ratio")
+st.caption("More longs = more liquidations below. More shorts = more liquidations above.")
+
+if ls_ratio:
+    ls_df = pd.DataFrame(ls_ratio)
+    ls_df["timestamp"] = pd.to_datetime(ls_df["timestamp"].astype(float), unit="ms")
+    ls_df["longShortRatio"] = ls_df["longShortRatio"].astype(float)
+    ls_df["longAccount"]    = ls_df["longAccount"].astype(float)
+    ls_df["shortAccount"]   = ls_df["shortAccount"].astype(float)
+
+    latest_ls = ls_df.iloc[-1]
+    lsr = float(latest_ls["longShortRatio"])
+    long_pct  = float(latest_ls["longAccount"]) * 100
+    short_pct = float(latest_ls["shortAccount"]) * 100
+
+    lc1,lc2,lc3 = st.columns(3)
+    lc1.metric("Long/Short Ratio", f"{lsr:.2f}",
+               "More longs" if lsr > 1 else "More shorts")
+    lc2.metric("Long Accounts",  f"{long_pct:.1f}%")
+    lc3.metric("Short Accounts", f"{short_pct:.1f}%")
+
+    if lsr > 1.5:
+        st.warning(f"⚠️ {long_pct:.1f}% of traders are LONG — lots of liquidations BELOW current price. Smart money may push DOWN to grab them first!")
+    elif lsr < 0.7:
+        st.success(f"✅ {short_pct:.1f}% of traders are SHORT — lots of liquidations ABOVE current price. Smart money may push UP to grab them first!")
+    else:
+        st.info(f"⚪ Balanced market — {long_pct:.1f}% long vs {short_pct:.1f}% short")
+
+    # L/S ratio chart
+    ls_fig = go.Figure()
+    ls_fig.add_trace(go.Scatter(
+        x=ls_df["timestamp"], y=ls_df["longAccount"]*100,
+        name="Longs %", fill="tozeroy",
+        line=dict(color="#00ff88",width=2),
+        fillcolor="rgba(0,255,136,0.15)"
+    ))
+    ls_fig.add_trace(go.Scatter(
+        x=ls_df["timestamp"], y=ls_df["shortAccount"]*100,
+        name="Shorts %", fill="tozeroy",
+        line=dict(color="#ff4444",width=2),
+        fillcolor="rgba(255,68,68,0.15)"
+    ))
+    ls_fig.add_hline(y=50, line_dash="dash", line_color="white", opacity=0.3)
+    ls_fig.update_layout(
+        height=250, template="plotly_dark",
+        paper_bgcolor="#050508", plot_bgcolor="#050508",
+        title="Long vs Short Account Ratio — 24H History",
+        yaxis_title="% of Accounts",
+        legend=dict(orientation="h"),
+        margin=dict(t=40,b=20,l=10,r=10)
+    )
+    ls_fig.update_xaxes(gridcolor="#0d0d18")
+    ls_fig.update_yaxes(gridcolor="#0d0d18")
+    st.plotly_chart(ls_fig, use_container_width=True)
+
+# ── TOP TRADER RATIO
+if top_ratio:
+    st.markdown("### 🏆 Top Trader Long/Short Ratio")
+    st.caption("What are the BIG traders doing? This matters more than retail.")
+
+    tt_df = pd.DataFrame(top_ratio)
+    tt_df["timestamp"]       = pd.to_datetime(tt_df["timestamp"].astype(float), unit="ms")
+    tt_df["longShortRatio"]  = tt_df["longShortRatio"].astype(float)
+    tt_df["longAccount"]     = tt_df["longAccount"].astype(float)
+    tt_df["shortAccount"]    = tt_df["shortAccount"].astype(float)
+
+    latest_tt = tt_df.iloc[-1]
+    tt_lsr    = float(latest_tt["longShortRatio"])
+    tt_long   = float(latest_tt["longAccount"]) * 100
+    tt_short  = float(latest_tt["shortAccount"]) * 100
+
+    tc1,tc2,tc3 = st.columns(3)
+    tc1.metric("Top Trader L/S", f"{tt_lsr:.2f}",
+               "Whales buying" if tt_lsr > 1 else "Whales selling")
+    tc2.metric("Top Trader Longs",  f"{tt_long:.1f}%")
+    tc3.metric("Top Trader Shorts", f"{tt_short:.1f}%")
+
+    if tt_lsr > 1.3:
+        st.success(f"✅ Top traders {tt_long:.1f}% LONG — whales are bullish! Follow the smart money UP")
+    elif tt_lsr < 0.8:
+        st.error(f"🔴 Top traders {tt_short:.1f}% SHORT — whales are bearish! Follow the smart money DOWN")
+    else:
+        st.info("⚪ Top traders balanced — no clear whale direction")
+
+    tt_fig = go.Figure()
+    tt_fig.add_trace(go.Scatter(
+        x=tt_df["timestamp"], y=tt_df["longAccount"]*100,
+        name="Top Long %", line=dict(color="#FFD700",width=2)
+    ))
+    tt_fig.add_trace(go.Scatter(
+        x=tt_df["timestamp"], y=tt_df["shortAccount"]*100,
+        name="Top Short %", line=dict(color="#ff8800",width=2)
+    ))
+    tt_fig.add_hline(y=50, line_dash="dash", line_color="white", opacity=0.3)
+    tt_fig.update_layout(
+        height=220, template="plotly_dark",
+        paper_bgcolor="#050508", plot_bgcolor="#050508",
+        title="Top Trader Positions — 24H",
+        legend=dict(orientation="h"),
+        margin=dict(t=40,b=20,l=10,r=10)
+    )
+    tt_fig.update_xaxes(gridcolor="#0d0d18")
+    tt_fig.update_yaxes(gridcolor="#0d0d18")
+    st.plotly_chart(tt_fig, use_container_width=True)
+
+st.markdown("---")
+
+# ── LIQUIDATION LEVEL ESTIMATOR
+st.markdown("### 💥 Estimated Liquidation Clusters")
+st.caption("Based on price range + leverage levels. Yellow = biggest cluster = price magnet!")
+
+# Build liquidation heatmap estimation
+# Most retail traders use 5x, 10x, 20x leverage
+# At 10x leverage: liquidated at 10% move
+# At 20x leverage: liquidated at 5% move
+# At 5x leverage:  liquidated at 20% move
+
+leverage_levels = {
+    "2x":  0.50,  # liquidated at 50% move
+    "3x":  0.33,  # liquidated at 33% move
+    "5x":  0.20,  # liquidated at 20% move
+    "10x": 0.10,  # liquidated at 10% move
+    "20x": 0.05,  # liquidated at 5% move
+    "50x": 0.02,  # liquidated at 2% move
+    "100x":0.01,  # liquidated at 1% move
+}
+
+# Most popular leverage = 10x and 20x
+# Generate liquidation price levels
+liq_levels = []
+price_range = curr_price * 0.15  # look 15% each side
+
+for lev_name, liq_pct in leverage_levels.items():
+    # Long liquidations (below current price)
+    long_liq_price = curr_price * (1 - liq_pct)
+    # Short liquidations (above current price)
+    short_liq_price = curr_price * (1 + liq_pct)
+
+    # Weight by popularity of leverage (10x and 20x most popular)
+    weight_map = {"2x":0.5,"3x":0.6,"5x":0.8,"10x":1.0,"20x":0.9,"50x":0.6,"100x":0.4}
+    weight = weight_map.get(lev_name, 0.5)
+
+    liq_levels.append({
+        "leverage":    lev_name,
+        "long_liq":    long_liq_price,
+        "short_liq":   short_liq_price,
+        "weight":      weight,
+        "liq_pct":     liq_pct * 100,
+        "type":        "long"
+    })
+
+# Sort by price
+long_liqs  = sorted(liq_levels, key=lambda x: x["long_liq"],  reverse=True)
+short_liqs = sorted(liq_levels, key=lambda x: x["short_liq"])
+
+liq_col1, liq_col2 = st.columns(2)
+
+with liq_col1:
+    st.markdown("**🔴 Long Liquidation Levels (below price)**")
+    st.caption("If price drops here → these longs get liquidated")
+    for item in long_liqs:
+        price  = item["long_liq"]
+        weight = item["weight"]
+        dist   = (curr_price - price) / curr_price * 100
+        bar    = int(weight * 100)
+        if weight >= 0.9:   color, emoji = "#ff4444", "🔥🔥🔥 MAJOR"
+        elif weight >= 0.7: color, emoji = "#ff8800", "🔥🔥 Strong"
+        else:               color, emoji = "#ff4444", "🔥 Moderate"
+        st.markdown(f"""
+        <div style="background:#0d0d1a;border-left:3px solid {color};
+        border-radius:4px;padding:8px;margin:3px 0;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;height:100%;width:{bar}%;
+        background:rgba(255,68,68,{weight*0.2:.2f});"></div>
+        <b style="color:{color};">${price:,.0f}</b>
+        <span style="float:right;font-size:11px;">{emoji}</span><br>
+        <span style="color:#aaa;font-size:12px;">
+        {item['leverage']} leverage | -{dist:.1f}% from price
+        </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+with liq_col2:
+    st.markdown("**🟢 Short Liquidation Levels (above price)**")
+    st.caption("If price rises here → these shorts get liquidated")
+    for item in short_liqs:
+        price  = item["short_liq"]
+        weight = item["weight"]
+        dist   = (price - curr_price) / curr_price * 100
+        bar    = int(weight * 100)
+        if weight >= 0.9:   color, emoji = "#00ff88", "🔥🔥🔥 MAJOR"
+        elif weight >= 0.7: color, emoji = "#00cc66", "🔥🔥 Strong"
+        else:               color, emoji = "#00aa44", "🔥 Moderate"
+        st.markdown(f"""
+        <div style="background:#0d0d1a;border-left:3px solid {color};
+        border-radius:4px;padding:8px;margin:3px 0;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;height:100%;width:{bar}%;
+        background:rgba(0,255,136,{weight*0.2:.2f});"></div>
+        <b style="color:{color};">${price:,.0f}</b>
+        <span style="float:right;font-size:11px;">{emoji}</span><br>
+        <span style="color:#aaa;font-size:12px;">
+        {item['leverage']} leverage | +{dist:.1f}% from price
+        </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+# ── LIQUIDATION HEATMAP CHART
+st.markdown(" ")
+st.markdown("### 🌡️ Liquidation Heatmap Chart")
+st.caption("Similar to CoinGlass — thicker/brighter bar = bigger liquidation cluster = stronger price magnet")
+
+heat_fig = go.Figure()
+
+# Add price line
+heat_fig.add_hline(
+    y=curr_price,
+    line_dash="solid", line_color="white", line_width=2,
+    annotation_text=f"Current ${curr_price:,.0f}",
+    annotation_font_color="white",
+    annotation_position="right"
+)
+
+# Plot long liquidation bars
+for item in long_liqs:
+    price  = item["long_liq"]
+    weight = item["weight"]
+    opacity = weight * 0.8
+    bar_width = weight * 0.8
+    color_intensity = int(weight * 255)
+    heat_fig.add_shape(
+        type="rect",
+        x0=0, x1=weight,
+        y0=price - curr_price*0.002,
+        y1=price + curr_price*0.002,
+        fillcolor=f"rgba({color_intensity},50,50,{opacity:.2f})",
+        line=dict(color=f"rgba(255,50,50,{opacity:.2f})", width=1),
+    )
+    heat_fig.add_annotation(
+        x=weight + 0.02, y=price,
+        text=f"{item['leverage']} — ${price:,.0f}",
+        showarrow=False,
+        font=dict(color="#ff8888", size=10),
+        xanchor="left"
+    )
+
+# Plot short liquidation bars
+for item in short_liqs:
+    price  = item["short_liq"]
+    weight = item["weight"]
+    opacity = weight * 0.8
+    color_intensity = int(weight * 255)
+    heat_fig.add_shape(
+        type="rect",
+        x0=0, x1=weight,
+        y0=price - curr_price*0.002,
+        y1=price + curr_price*0.002,
+        fillcolor=f"rgba(50,{color_intensity},80,{opacity:.2f})",
+        line=dict(color=f"rgba(50,255,100,{opacity:.2f})", width=1),
+    )
+    heat_fig.add_annotation(
+        x=weight + 0.02, y=price,
+        text=f"{item['leverage']} — ${price:,.0f}",
+        showarrow=False,
+        font=dict(color="#88ff88", size=10),
+        xanchor="left"
+    )
+
+# Price range
+all_prices = [item["long_liq"] for item in long_liqs] + [item["short_liq"] for item in short_liqs]
+y_min = min(all_prices) * 0.998
+y_max = max(all_prices) * 1.002
+
+heat_fig.update_layout(
+    height=500,
+    template="plotly_dark",
+    paper_bgcolor="#050508",
+    plot_bgcolor="#0a0a0f",
+    title=f"Estimated Liquidation Heatmap — {coin} @ ${curr_price:,.0f}",
+    xaxis=dict(visible=False, range=[0, 1.3]),
+    yaxis=dict(
+        title="Price Level",
+        range=[y_min, y_max],
+        gridcolor="#0d0d18"
+    ),
+    margin=dict(t=50, b=20, l=80, r=150),
+    showlegend=False
+)
+st.plotly_chart(heat_fig, use_container_width=True)
+
+# ── KEY LIQUIDATION TARGETS
+st.markdown("### 🎯 Key Liquidation Price Targets")
+st.caption("Smart money hunts these levels. Watch for price to sweep here then reverse!")
+
+# Most important levels — 10x and 20x (most popular leverage)
+major_long_liq  = curr_price * 0.90   # 10x long liq
+major_short_liq = curr_price * 1.10   # 10x short liq
+liq_20x_long    = curr_price * 0.95   # 20x long liq
+liq_20x_short   = curr_price * 1.05   # 20x short liq
+liq_50x_long    = curr_price * 0.98   # 50x long liq
+liq_50x_short   = curr_price * 1.02   # 50x short liq
+
+kc1,kc2,kc3 = st.columns(3)
+with kc1:
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:1px solid #ff444433;border-radius:8px;padding:12px;text-align:center;">
+    <b style="color:#ff4444;">50x Long Liq</b><br>
+    <b style="font-size:20px;color:#ff4444;">${liq_50x_long:,.0f}</b><br>
+    <span style="color:#888;font-size:12px;">-2% from price<br>🔥🔥🔥 Nearest target</span>
+    </div>
+    """, unsafe_allow_html=True)
+with kc2:
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:1px solid #ff880033;border-radius:8px;padding:12px;text-align:center;">
+    <b style="color:#ff8800;">20x Long Liq</b><br>
+    <b style="font-size:20px;color:#ff8800;">${liq_20x_long:,.0f}</b><br>
+    <span style="color:#888;font-size:12px;">-5% from price<br>🔥🔥 Strong target</span>
+    </div>
+    """, unsafe_allow_html=True)
+with kc3:
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:1px solid #ff444433;border-radius:8px;padding:12px;text-align:center;">
+    <b style="color:#ff4444;">10x Long Liq</b><br>
+    <b style="font-size:20px;color:#ff4444;">${major_long_liq:,.0f}</b><br>
+    <span style="color:#888;font-size:12px;">-10% from price<br>🔥 Major target</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+kc4,kc5,kc6 = st.columns(3)
+with kc4:
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:1px solid #00ff8833;border-radius:8px;padding:12px;text-align:center;">
+    <b style="color:#00ff88;">50x Short Liq</b><br>
+    <b style="font-size:20px;color:#00ff88;">${liq_50x_short:,.0f}</b><br>
+    <span style="color:#888;font-size:12px;">+2% from price<br>🔥🔥🔥 Nearest target</span>
+    </div>
+    """, unsafe_allow_html=True)
+with kc5:
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:1px solid #00ff8833;border-radius:8px;padding:12px;text-align:center;">
+    <b style="color:#00ff88;">20x Short Liq</b><br>
+    <b style="font-size:20px;color:#00ff88;">${liq_20x_short:,.0f}</b><br>
+    <span style="color:#888;font-size:12px;">+5% from price<br>🔥🔥 Strong target</span>
+    </div>
+    """, unsafe_allow_html=True)
+with kc6:
+    st.markdown(f"""
+    <div style="background:#0d0d1a;border:1px solid #00ff8833;border-radius:8px;padding:12px;text-align:center;">
+    <b style="color:#00ff88;">10x Short Liq</b><br>
+    <b style="font-size:20px;color:#00ff88;">${major_short_liq:,.0f}</b><br>
+    <span style="color:#888;font-size:12px;">+10% from price<br>🔥 Major target</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ── HOW TO TRADE LIQUIDATION LEVELS
+st.markdown("### 📚 How To Trade Liquidation Levels")
+col_a, col_b = st.columns(2)
+with col_a:
+    st.success("""
+**LONG Setup using liquidation levels:**
+
+1. Price drops toward long liq level (e.g. $74,000)
+2. You see a liquidity sweep on 15m
+3. BOS forms on 15m after the sweep
+4. CHoCH confirms reversal
+5. Enter long — target: next short liq above
+6. SL: below the liq level
+    """)
+with col_b:
+    st.error("""
+**SHORT Setup using liquidation levels:**
+
+1. Price pumps toward short liq level (e.g. $76,000)
+2. You see a sell liquidity sweep on 15m
+3. BOS forms down on 15m
+4. CHoCH confirms reversal down
+5. Enter short — target: next long liq below
+6. SL: above the liq level
+    """)
+
+st.info("""
+💡 **Pro Tip:** Combine liquidation levels with your dashboard signals!
+- Liquidation level + Discount Zone + BOS = Very strong long setup
+- Liquidation level + Premium Zone + CHoCH = Very strong short setup
+- Always wait for CONFIRMATION before entering — never trade into the level
+""")
+
+# ════════════════════════════════════════════════════════════════
+# CHART PATTERN DETECTION
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("🔍 Multi Coin Scanner")
+st.caption("Scans all coins at once and shows which has the strongest signal right now")
+
+SCAN_COINS = ["BTC/USDT","ETH/USDT","SOL/USDT","ADA/USDT","MATIC/USDT","BNB/USDT","AVAX/USDT","LINK/USDT","DOT/USDT","ATOM/USDT","NEAR/USDT","OP/USDT","ARB/USDT","DOGE/USDT","XRP/USDT","INJ/USDT","SUI/USDT","APT/USDT"]
+
+@st.cache_data(ttl=120)
+def scan_all_coins(coins, tf, lim):
+    results = []
+    for c in coins:
+        try:
+            d = get_data(c, tf, lim)
+            if d.empty: continue
+            d = add_indicators(d)
+            d = detect_smc(d)
+            sup, res = detect_sr_zones(d)
+            s, css, score, ms, reasons, lat2, b = full_signal(d, sup, res)
+            pct = (lat2["close"] - d["close"].iloc[-2]) / d["close"].iloc[-2] * 100
+            results.append({
+                "coin": c.replace("/USDT",""),
+                "price": lat2["close"],
+                "pct": pct,
+                "signal": s,
+                "score": score,
+                "bias": b,
+                "rsi": lat2["rsi"],
+                "vol_spike": lat2["vol_spike"],
+                "bos": lat2["bos_bull"] or lat2["bos_bear"],
+                "choch": lat2["choch_bull"] or lat2["choch_bear"],
+                "css": css
+            })
+        except: continue
+    return sorted(results, key=lambda x: abs(x["score"]), reverse=True)
+
+if st.button("🔄 Scan All Coins Now", key="btn_17"):
+    st.cache_data.clear()
+
+scan_results = scan_all_coins(SCAN_COINS, timeframe, limit)
+
+if scan_results:
+    # Summary bar
+    bullish_count = sum(1 for r in scan_results if r["score"] >= 4)
+    bearish_count = sum(1 for r in scan_results if r["score"] <= -4)
+    neutral_count = len(scan_results) - bullish_count - bearish_count
+    sb1, sb2, sb3 = st.columns(3)
+    sb1.metric("Bullish Coins 🟢", bullish_count)
+    sb2.metric("Neutral Coins ⚪", neutral_count)
+    sb3.metric("Bearish Coins 🔴", bearish_count)
+
+    # Scanner cards
+    num_cols = 4
+    for row_i in range((len(scan_results) + num_cols - 1) // num_cols):
+        cols = st.columns(num_cols)
+        for col_i in range(num_cols):
+            idx = row_i * num_cols + col_i
+            if idx >= len(scan_results): break
+            r = scan_results[idx]
+            with cols[col_i]:
+                color = "#00ff88" if r["score"] >= 4 else "#ff4444" if r["score"] <= -4 else "#888"
+                pct_arrow = "🟢" if r["pct"] > 0 else "🔴"
+                st.markdown(f"""
+                <div style="background:#0d0d1a;border:1px solid {color}33;border-left:3px solid {color};
+                border-radius:8px;padding:12px;margin:3px 0;">
+                <b style="font-size:16px;color:{color};">{r['coin']}</b>
+                <span style="float:right;color:#aaa;font-size:12px;">{pct_arrow}{r['pct']:+.2f}%</span><br>
+                <span style="color:#ddd;font-size:13px;">${r['price']:,.2f}</span><br>
+                <span style="color:{color};font-size:12px;font-weight:700;">Score: {r['score']}/30</span><br>
+                <span style="color:#aaa;font-size:11px;">RSI: {r['rsi']:.0f} | {r['bias']}</span><br>
+                <span style="color:#aaa;font-size:11px;">
+                {'🚀 Vol Spike' if r['vol_spike'] else ''}
+                {'⚡ BOS' if r['bos'] else ''}
+                {'🔄 CHoCH' if r['choch'] else ''}
+                </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Best opportunity
+    if scan_results:
+        best_scan = scan_results[0]
+        bc = "#00ff88" if best_scan["score"] >= 4 else "#ff4444" if best_scan["score"] <= -4 else "#888"
+        st.markdown(f"""
+        <div style="background:#0d0d1a;border:2px solid {bc};border-radius:10px;padding:16px;margin:12px 0;text-align:center;">
+        <b style="font-size:20px;color:{bc};">🎯 Strongest Signal: {best_scan['coin']} — Score {best_scan['score']}/30</b><br>
+        <span style="color:#aaa;">Switch coin selector to {best_scan['coin']} to see full analysis</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════════
+# ── SESSION TIMES
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("🕐 Trading Session Times")
+st.caption("Big moves happen at session opens. Know when to watch the market.")
+
+now_utc = datetime.utcnow()
+sessions = [
+    {"name": "Asia",   "open": 0,  "close": 9,  "color": "#FFD700", "desc": "Tokyo/Singapore — lower volume, ranging"},
+    {"name": "London", "open": 8,  "close": 17, "color": "#00bfff", "desc": "Most liquidity grabs happen here"},
+    {"name": "New York","open": 13, "close": 22, "color": "#00ff88", "desc": "Highest volume — biggest moves"},
+    {"name": "Overlap", "open": 13, "close": 17, "color": "#bf00ff", "desc": "London+NY overlap — most volatile!"},
+]
+current_hour = now_utc.hour
+sc1, sc2, sc3, sc4 = st.columns(4)
+for col, sess in zip([sc1, sc2, sc3, sc4], sessions):
+    is_open = sess["open"] <= current_hour < sess["close"]
+    status  = "🟢 OPEN NOW" if is_open else "🔴 Closed"
+    with col:
+        st.markdown(f"""
+        <div style="background:#0d0d1a;border:1px solid {sess['color']}44;border-left:3px solid {sess['color']};
+        border-radius:8px;padding:12px;margin:3px 0;">
+        <b style="color:{sess['color']};font-size:16px;">{sess['name']}</b><br>
+        <span style="color:#ddd;font-size:13px;">{sess['open']:02d}:00 – {sess['close']:02d}:00 UTC</span><br>
+        <span style="font-size:13px;">{status}</span><br>
+        <span style="color:#888;font-size:11px;">{sess['desc']}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+# Session chart
+st.markdown(" ")
+sess_fig = go.Figure()
+for sess in sessions:
+    sess_fig.add_vrect(
+        x0=sess["open"], x1=sess["close"],
+        fillcolor=sess["color"], opacity=0.08,
+        line_width=1, line_color=sess["color"],
+        annotation_text=sess["name"],
+        annotation_font_color=sess["color"],
+        annotation_position="top left"
+    )
+sess_fig.add_vline(x=current_hour, line_dash="solid", line_color="white",
+    line_width=2, annotation_text=f"NOW {current_hour:02d}:00 UTC",
+    annotation_font_color="white")
+sess_fig.update_xaxes(range=[0,24], tickvals=list(range(0,25,2)),
+    ticktext=[f"{h:02d}:00" for h in range(0,25,2)], title="UTC Hour")
+sess_fig.update_yaxes(visible=False)
+sess_fig.update_layout(height=180, template="plotly_dark",
+    paper_bgcolor="#050508", plot_bgcolor="#050508",
+    title="24h Session Map — Current UTC Time Shown",
+    margin=dict(t=40, b=40, l=10, r=10))
+st.plotly_chart(sess_fig, use_container_width=True)
+
+# ════════════════════════════════════════════════════════════════
+# ── HEAT MAP
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("🌡️ Crypto Heat Map")
+st.caption("See which coins are pumping or dumping right now")
+
+@st.cache_data(ttl=120)
+def get_heatmap_data():
+    coins = ["BTC","ETH","SOL","ADA","MATIC","BNB","AVAX","LINK","DOT","ATOM","NEAR","FTM","OP","ARB","APT","DOGE","XRP","LTC","UNI","AAVE","INJ","SUI","SEI","WLD","FET","RNDR","IMX","SAND","TRX","NEAR"]
+    data  = []
+    ex    = ccxt.binance()
+    for c in coins:
+        try:
+            ticker = ex.fetch_ticker(f"{c}/USDT")
+            data.append({
+                "coin": c,
+                "price": ticker["last"],
+                "pct_1h": ticker.get("percentage", 0) or 0,
+                "volume": ticker.get("quoteVolume", 0) or 0,
+            })
+        except: continue
+    return data
+
+hmap_data = get_heatmap_data()
+
+if hmap_data:
+    # Sort by % change
+    hmap_data = sorted(hmap_data, key=lambda x: x["pct_1h"], reverse=True)
+
+    cols_per_row = 5
+    for row_i in range((len(hmap_data) + cols_per_row - 1) // cols_per_row):
+        cols = st.columns(cols_per_row)
+        for col_i in range(cols_per_row):
+            idx = row_i * cols_per_row + col_i
+            if idx >= len(hmap_data): break
+            d = hmap_data[idx]
+            pct = d["pct_1h"]
+            if pct >= 3:   bg, tc = "#0d4a1e", "#00ff88"
+            elif pct >= 1: bg, tc = "#0a3a15", "#00cc66"
+            elif pct >= 0: bg, tc = "#0a2a10", "#00aa44"
+            elif pct >= -1: bg, tc = "#3a0d0d", "#ff6666"
+            elif pct >= -3: bg, tc = "#4a0d0d", "#ff4444"
+            else:           bg, tc = "#5a0d0d", "#ff2222"
+            with cols[col_i]:
+                st.markdown(f"""
+                <div style="background:{bg};border-radius:8px;padding:12px;margin:3px;text-align:center;">
+                <b style="color:{tc};font-size:16px;">{d['coin']}</b><br>
+                <span style="color:{tc};font-size:18px;font-weight:700;">{pct:+.2f}%</span><br>
+                <span style="color:#aaa;font-size:11px;">${d['price']:,.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Heatmap bar chart
+    hmap_fig = go.Figure(go.Bar(
+        x=[d["coin"] for d in hmap_data],
+        y=[d["pct_1h"] for d in hmap_data],
+        marker_color=["#00ff88" if d["pct_1h"] >= 0 else "#ff4444" for d in hmap_data],
+        text=[f"{d['pct_1h']:+.2f}%" for d in hmap_data],
+        textposition="outside"
+    ))
+    hmap_fig.update_layout(
+        height=300, template="plotly_dark",
+        paper_bgcolor="#050508", plot_bgcolor="#050508",
+        title="24h Price Change % — All Coins",
+        margin=dict(t=40, b=20)
+    )
+    hmap_fig.add_hline(y=0, line_color="white", line_width=1, opacity=0.3)
+    st.plotly_chart(hmap_fig, use_container_width=True)
+
+# ════════════════════════════════════════════════════════════════
+# ── NEWS FEED
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("📰 Live Crypto News")
+st.caption("Latest crypto news — always know what is moving the market")
+
+@st.cache_data(ttl=300)
+def get_crypto_news():
+    try:
+        url = "https://api.coingecko.com/api/v3/news"
+        r   = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("data", [])[:10]
+    except: pass
+    # Fallback — CryptoPanic public RSS
+    try:
+        url = "https://cryptopanic.com/api/v1/posts/?auth_token=public&kind=news&public=true"
+        r   = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            posts = data.get("results", [])[:10]
+            return [{"title": p["title"], "url": p["url"],
+                     "published_at": p.get("published_at",""), "source": p.get("source",{}).get("title","")} for p in posts]
+    except: pass
+    return []
+
+news_items = get_crypto_news()
+if news_items:
+    for item in news_items[:8]:
+        title  = item.get("title","")
+        url    = item.get("url","#")
+        source = item.get("source","") or item.get("author","")
+        date   = str(item.get("published_at","") or item.get("created_at",""))[:16]
+        # Sentiment colour
+        bull_words = ["surge","pump","bull","rise","gain","rally","up","high","buy","moon"]
+        bear_words = ["crash","dump","bear","fall","drop","down","low","sell","fear","loss"]
+        title_lower = title.lower()
+        if any(w in title_lower for w in bull_words):   nc = "#00ff8833"
+        elif any(w in title_lower for w in bear_words): nc = "#ff444433"
+        else:                                            nc = "#1e1e3a"
+        st.markdown(f"""
+        <div style="background:{nc};border-radius:8px;padding:10px 14px;margin:4px 0;border:1px solid #333;">
+        <a href="{url}" target="_blank" style="color:#ddd;text-decoration:none;font-size:14px;font-weight:600;">{title}</a><br>
+        <span style="color:#888;font-size:11px;">{source} &nbsp;|&nbsp; {date}</span>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    st.info("News feed loading... Check your internet connection or try refreshing.")
+    st.markdown("""
+    **Top crypto news sources to check manually:**
+    - [CoinDesk](https://coindesk.com)
+    - [CoinTelegraph](https://cointelegraph.com)
+    - [CryptoPanic](https://cryptopanic.com)
+    """)
+
+# ════════════════════════════════════════════════════════════════
+# ── TRADING JOURNAL
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("📓 Trading Journal")
+st.caption("Log every trade. This is the most important habit for improving.")
+
+if "journal" not in st.session_state:
+    st.session_state.journal = []
+
+with st.expander("➕ Log A New Trade", expanded=False):
+    jc1, jc2, jc3 = st.columns(3)
+    j_coin    = jc1.selectbox("Coin", ["BTC","ETH","SOL","ADA","MATIC","BNB","AVAX","LINK","DOT","ATOM","NEAR","OP","ARB","DOGE","XRP","INJ","SUI","APT","FET","RNDR"], key="j_coin")
+    j_dir     = jc2.selectbox("Direction", ["LONG","SHORT"], key="j_dir")
+    j_result  = jc3.selectbox("Result", ["WIN","LOSS","BREAKEVEN"], key="j_result")
+    jc4, jc5, jc6 = st.columns(3)
+    j_entry   = jc4.number_input("Entry Price", value=0.0, key="j_entry")
+    j_exit    = jc5.number_input("Exit Price",  value=0.0, key="j_exit")
+    j_size    = jc6.number_input("Position Size (USDT)", value=10.0, key="j_size")
+    jc7, jc8  = st.columns(2)
+    j_signal  = jc7.selectbox("Signal That Triggered",
+        ["BOS","CHoCH","OB Retest","FVG Fill","Liquidity Sweep","Support Bounce","Resistance Reject","Other"], key="j_signal")
+    j_tf      = jc8.selectbox("Timeframe Used", ["15m","1h","4h","1d"], key="j_tf")
+    j_notes   = st.text_area("Notes / What I Learned", placeholder="Why did I take this trade? What happened? What would I do differently?", key="j_notes")
+
+    if st.button("💾 Save Trade", key="btn_18"):
+        if j_entry > 0 and j_exit > 0:
+            pnl = (j_exit - j_entry) / j_entry * 100 if j_dir == "LONG" else (j_entry - j_exit) / j_entry * 100
+            pnl_usdt = j_size * (pnl / 100)
+            st.session_state.journal.append({
+                "date":    datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "coin":    j_coin,
+                "dir":     j_dir,
+                "entry":   j_entry,
+                "exit":    j_exit,
+                "result":  j_result,
+                "pnl_pct": round(pnl, 2),
+                "pnl_usdt":round(pnl_usdt, 2),
+                "signal":  j_signal,
+                "tf":      j_tf,
+                "notes":   j_notes,
+                "size":    j_size
+            })
+            st.success("Trade saved! ✅")
+        else:
+            st.warning("Please enter entry and exit prices.")
+
+if st.session_state.journal:
+    jdf = pd.DataFrame(st.session_state.journal)
+
+    # ── Win Rate Calculator
+    st.markdown("---")
+    st.subheader("📊 Win Rate Calculator")
+    wins      = len(jdf[jdf["result"] == "WIN"])
+    losses    = len(jdf[jdf["result"] == "LOSS"])
+    total     = len(jdf)
+    win_rate  = wins / total * 100 if total > 0 else 0
+    total_pnl = jdf["pnl_usdt"].sum()
+    avg_win   = jdf[jdf["result"]=="WIN"]["pnl_usdt"].mean() if wins > 0 else 0
+    avg_loss  = jdf[jdf["result"]=="LOSS"]["pnl_usdt"].mean() if losses > 0 else 0
+    rr_ratio  = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+    wc1,wc2,wc3,wc4,wc5,wc6 = st.columns(6)
+    wc1.metric("Total Trades", total)
+    wc2.metric("Win Rate",    f"{win_rate:.1f}%", f"{wins}W / {losses}L")
+    wc3.metric("Total P&L",   f"${total_pnl:.2f}", "Profit" if total_pnl > 0 else "Loss")
+    wc4.metric("Avg Win",     f"${avg_win:.2f}")
+    wc5.metric("Avg Loss",    f"${avg_loss:.2f}")
+    wc6.metric("R:R Ratio",   f"{rr_ratio:.2f}")
+
+    # Profitability check
+    if win_rate >= 50 and rr_ratio >= 1.5:
+        st.success("✅ Strategy is profitable! Keep following the rules.")
+    elif win_rate >= 40 and rr_ratio >= 2.0:
+        st.success("✅ Low win rate but good R:R — strategy can still be profitable!")
+    elif total >= 5:
+        st.warning("⚠️ Strategy needs improvement. Review your losing trades.")
+
+    # Win rate by signal
+    if len(jdf) >= 3:
+        st.markdown("**Win Rate by Signal:**")
+        sig_stats = jdf.groupby("signal").apply(
+            lambda x: pd.Series({"Trades": len(x), "Wins": (x["result"]=="WIN").sum(),
+                                  "Win%": round((x["result"]=="WIN").mean()*100,1),
+                                  "P&L": round(x["pnl_usdt"].sum(),2)})
+        ).reset_index()
+        st.dataframe(sig_stats, use_container_width=True, hide_index=True)
+
+    # P&L chart
+    if len(jdf) >= 2:
+        jdf["cumulative_pnl"] = jdf["pnl_usdt"].cumsum()
+        pnl_fig = go.Figure()
+        pnl_fig.add_trace(go.Scatter(
+            x=jdf["date"], y=jdf["cumulative_pnl"],
+            name="Cumulative P&L", fill="tozeroy",
+            line=dict(color="#00ff88" if total_pnl >= 0 else "#ff4444", width=2),
+            fillcolor="rgba(0,255,136,0.08)" if total_pnl >= 0 else "rgba(255,68,68,0.08)"
+        ))
+        pnl_fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3)
+        pnl_fig.update_layout(height=250, template="plotly_dark",
+            paper_bgcolor="#050508", plot_bgcolor="#050508",
+            title="Cumulative P&L ($)", margin=dict(t=30, b=20))
+        st.plotly_chart(pnl_fig, use_container_width=True)
+
+    # Full journal table
+    st.markdown("**All Trades:**")
+    display_cols = ["date","coin","dir","entry","exit","result","pnl_pct","pnl_usdt","signal","tf"]
+    jdf_display  = jdf[display_cols].copy()
+    jdf_display.columns = ["Date","Coin","Dir","Entry","Exit","Result","P&L%","P&L$","Signal","TF"]
+    st.dataframe(jdf_display, use_container_width=True, hide_index=True)
+
+    if st.button("🗑️ Clear Journal", key="btn_19"):
+        st.session_state.journal = []
+        st.rerun()
+else:
+    st.info("No trades logged yet. Use the form above to log your first trade!")
+
+# ════════════════════════════════════════════════════════════════
+# ── PAPER TRADING TRACKER
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("📄 Paper Trading Tracker")
+st.caption("Practice trading with fake money. Build confidence before using real money.")
+
+if "paper_balance" not in st.session_state:
+    st.session_state.paper_balance  = 1000.0
+if "paper_trades" not in st.session_state:
+    st.session_state.paper_trades   = []
+if "paper_position" not in st.session_state:
+    st.session_state.paper_position = None
+
+current_price = float(lat["close"])
+pb1, pb2, pb3 = st.columns(3)
+pb1.metric("Paper Balance", f"${st.session_state.paper_balance:.2f}")
+pb2.metric("Current Price", f"${current_price:,.2f}")
+pb3.metric("Position", "OPEN 📈" if st.session_state.paper_position else "None")
+
+if st.session_state.paper_position is None:
+    # Open trade
+    st.markdown("**Open Paper Trade:**")
+    pc1, pc2, pc3 = st.columns(3)
+    p_dir    = pc1.selectbox("Direction", ["LONG","SHORT"], key="p_dir")
+    p_size   = pc2.number_input("Trade Size (USDT)", value=50.0, min_value=1.0,
+                                 max_value=st.session_state.paper_balance, key="p_size")
+    p_lev    = pc3.selectbox("Leverage", ["1x","2x","3x","5x","10x"], key="p_lev")
+    p_sl     = st.number_input("Stop Loss Price", value=round(current_price * 0.98, 2), key="p_sl")
+    p_tp     = st.number_input("Take Profit Price", value=round(current_price * 1.03, 2), key="p_tp")
+
+    if st.button("📈 Open Paper Trade", key="btn_20"):
+        lev_val = int(p_lev.replace("x",""))
+        st.session_state.paper_position = {
+            "coin":    coin, "dir": p_dir, "entry": current_price,
+            "size":    p_size, "leverage": lev_val,
+            "sl":      p_sl, "tp": p_tp,
+            "time":    datetime.now().strftime("%H:%M"),
+            "signal":  sig
+        }
+        st.success(f"Paper trade opened! {p_dir} {coin} at ${current_price:,.2f}")
+        st.rerun()
+else:
+    pos = st.session_state.paper_position
+    # Calculate live P&L
+    if pos["dir"] == "LONG":
+        pnl_pct = (current_price - pos["entry"]) / pos["entry"] * 100 * pos["leverage"]
+    else:
+        pnl_pct = (pos["entry"] - current_price) / pos["entry"] * 100 * pos["leverage"]
+    pnl_usdt = pos["size"] * (pnl_pct / 100)
+
+    pc1, pc2, pc3, pc4 = st.columns(4)
+    pc1.metric("Direction",   pos["dir"])
+    pc2.metric("Entry Price", f"${pos['entry']:,.2f}")
+    pc3.metric("Live P&L",    f"${pnl_usdt:.2f}", f"{pnl_pct:.2f}%")
+    pc4.metric("Leverage",    f"{pos['leverage']}x")
+
+    col_sl, col_tp = st.columns(2)
+    col_sl.metric("Stop Loss",   f"${pos['sl']:,.2f}")
+    col_tp.metric("Take Profit", f"${pos['tp']:,.2f}")
+
+    # Check if SL or TP hit
+    sl_hit = (pos["dir"]=="LONG" and current_price <= pos["sl"]) or (pos["dir"]=="SHORT" and current_price >= pos["sl"])
+    tp_hit = (pos["dir"]=="LONG" and current_price >= pos["tp"]) or (pos["dir"]=="SHORT" and current_price <= pos["tp"])
+
+    if sl_hit:
+        st.error("🔴 STOP LOSS HIT!")
+    elif tp_hit:
+        st.success("🟢 TAKE PROFIT HIT!")
+
+    if st.button("❌ Close Paper Trade", key="btn_21"):
+        new_balance = st.session_state.paper_balance + pnl_usdt
+        result = "WIN" if pnl_usdt > 0 else "LOSS"
+        st.session_state.paper_trades.append({
+            "date":     datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "coin":     pos["coin"], "dir": pos["dir"],
+            "entry":    pos["entry"], "exit": current_price,
+            "pnl_pct":  round(pnl_pct, 2), "pnl_usdt": round(pnl_usdt, 2),
+            "result":   result, "leverage": pos["leverage"],
+            "signal":   pos["signal"]
+        })
+        st.session_state.paper_balance  = new_balance
+        st.session_state.paper_position = None
+        st.success(f"Trade closed! P&L: ${pnl_usdt:.2f} | New Balance: ${new_balance:.2f}")
+        st.rerun()
+
+if st.session_state.paper_trades:
+    st.markdown("**Paper Trade History:**")
+    ptdf = pd.DataFrame(st.session_state.paper_trades)
+    ptdf["cumulative"] = ptdf["pnl_usdt"].cumsum() + 1000
+    pt_wins = len(ptdf[ptdf["result"]=="WIN"])
+    pt_wr   = pt_wins / len(ptdf) * 100
+    pp1, pp2, pp3 = st.columns(3)
+    pp1.metric("Paper Win Rate", f"{pt_wr:.1f}%")
+    pp2.metric("Total Trades",   len(ptdf))
+    pp3.metric("Final Balance",  f"${st.session_state.paper_balance:.2f}",
+               f"${st.session_state.paper_balance-1000:.2f}")
+    st.dataframe(ptdf[["date","coin","dir","entry","exit","pnl_pct","pnl_usdt","result","leverage"]],
+                 use_container_width=True, hide_index=True)
+    if st.button("🔄 Reset Paper Account", key="btn_22"):
+        st.session_state.paper_balance  = 1000.0
+        st.session_state.paper_trades   = []
+        st.session_state.paper_position = None
+        st.rerun()
+
+# ════════════════════════════════════════════════════════════════
+# ── BACKTESTING
+# ════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.subheader("🔬 Simple Backtesting")
+st.caption("Test how the BOS and CHoCH signals performed on past data")
+
+bt_col1, bt_col2 = st.columns(2)
+bt_signal = bt_col1.selectbox("Signal To Test", ["BOS Bullish","CHoCH Bullish","Buy Liquidity Sweep","Volume Spike + BOS"])
+bt_hold   = bt_col2.selectbox("Hold For (candles)", [1, 2, 3, 5, 10])
+
+if st.button("▶️ Run Backtest", key="btn_23"):
     with st.spinner("Running backtest on historical data..."):
         bt_results = []
         for i in range(10, len(df) - bt_hold):
@@ -4063,581 +5400,34 @@ st.subheader("📐 Chart Pattern Detection")
 st.caption("Automatically scans your chart for the most important trading patterns")
 
 
-def detect_patterns(df):
-    patterns = []
-    n = len(df)
-    if n < 20:
-        return patterns
-
-    highs  = df["high"].values
-    lows   = df["low"].values
-    closes = df["close"].values
-    atr    = df["atr"].iloc[-1]
-    tol    = atr * 0.5  # tolerance for pattern matching
-
-    # ── 1. DOUBLE TOP
-    # Two peaks at similar level with valley between
-    for i in range(10, n-5):
-        for j in range(i+5, n-3):
-            h1 = highs[i]; h2 = highs[j]
-            valley = min(lows[i:j])
-            if (abs(h1-h2) < tol and
-                h1 > valley + atr*2 and
-                h2 > valley + atr*2 and
-                closes[-1] < valley + tol):
-                patterns.append({
-                    "name":    "Double Top 🔴",
-                    "type":    "bearish",
-                    "signal":  "BEARISH REVERSAL",
-                    "detail":  f"Two peaks near ${(h1+h2)/2:,.0f} — expecting DROP",
-                    "action":  "Look for short after neckline break",
-                    "strength": "🔥🔥🔥"
-                })
-                break
-
-    # ── 2. DOUBLE BOTTOM
-    for i in range(10, n-5):
-        for j in range(i+5, n-3):
-            l1 = lows[i]; l2 = lows[j]
-            peak = max(highs[i:j])
-            if (abs(l1-l2) < tol and
-                l1 < peak - atr*2 and
-                l2 < peak - atr*2 and
-                closes[-1] > peak - tol):
-                patterns.append({
-                    "name":    "Double Bottom 🟢",
-                    "type":    "bullish",
-                    "signal":  "BULLISH REVERSAL",
-                    "detail":  f"Two lows near ${(l1+l2)/2:,.0f} — expecting PUMP",
-                    "action":  "Look for long after neckline break",
-                    "strength": "🔥🔥🔥"
-                })
-                break
-
-    # ── 3. HEAD AND SHOULDERS (bearish)
-    recent = 30
-    if n >= recent:
-        seg = df.tail(recent)
-        sh = seg["high"].values
-        sl = seg["low"].values
-        mid = len(sh) // 2
-        left_sh  = max(sh[:mid//2])
-        head     = max(sh[mid//2:mid+mid//2])
-        right_sh = max(sh[mid+mid//2:])
-        neckline = min(sl[mid//2:mid+mid//2])
-        if (head > left_sh * 1.01 and
-            head > right_sh * 1.01 and
-            abs(left_sh - right_sh) / left_sh < 0.03 and
-            closes[-1] < neckline + tol):
-            patterns.append({
-                "name":    "Head & Shoulders 🔴",
-                "type":    "bearish",
-                "signal":  "BEARISH REVERSAL",
-                "detail":  f"Head at ${head:,.0f}, neckline at ${neckline:,.0f}",
-                "action":  "Look for short on neckline break",
-                "strength": "🔥🔥🔥"
-            })
-
-    # ── 4. INVERSE HEAD AND SHOULDERS (bullish)
-    if n >= recent:
-        seg = df.tail(recent)
-        sh = seg["high"].values
-        sl = seg["low"].values
-        mid = len(sl) // 2
-        left_sh  = min(sl[:mid//2])
-        head     = min(sl[mid//2:mid+mid//2])
-        right_sh = min(sl[mid+mid//2:])
-        neckline = max(sh[mid//2:mid+mid//2])
-        if (head < left_sh * 0.99 and
-            head < right_sh * 0.99 and
-            abs(left_sh - right_sh) / left_sh < 0.03 and
-            closes[-1] > neckline - tol):
-            patterns.append({
-                "name":    "Inverse H&S 🟢",
-                "type":    "bullish",
-                "signal":  "BULLISH REVERSAL",
-                "detail":  f"Head at ${head:,.0f}, neckline at ${neckline:,.0f}",
-                "action":  "Look for long on neckline break",
-                "strength": "🔥🔥🔥"
-            })
-
-    # ── 5. ASCENDING TRIANGLE (bullish)
-    if n >= 20:
-        seg = df.tail(20)
-        seg_highs = seg["high"].values
-        seg_lows  = seg["low"].values
-        flat_top  = max(seg_highs)
-        rising_lows = all(seg_lows[i] >= seg_lows[i-1]*0.998 for i in range(1, len(seg_lows)))
-        if (rising_lows and
-            abs(seg_highs[-1] - flat_top) / flat_top < 0.01 and
-            abs(seg_highs[-5] - flat_top) / flat_top < 0.015):
-            patterns.append({
-                "name":    "Ascending Triangle 🟢",
-                "type":    "bullish",
-                "signal":  "BULLISH CONTINUATION",
-                "detail":  f"Flat resistance at ${flat_top:,.0f}, rising lows",
-                "action":  "Wait for breakout above resistance",
-                "strength": "🔥🔥"
-            })
-
-    # ── 6. DESCENDING TRIANGLE (bearish)
-    if n >= 20:
-        seg = df.tail(20)
-        seg_highs = seg["high"].values
-        seg_lows  = seg["low"].values
-        flat_bot  = min(seg_lows)
-        falling_highs = all(seg_highs[i] <= seg_highs[i-1]*1.002 for i in range(1, len(seg_highs)))
-        if (falling_highs and
-            abs(seg_lows[-1] - flat_bot) / flat_bot < 0.01):
-            patterns.append({
-                "name":    "Descending Triangle 🔴",
-                "type":    "bearish",
-                "signal":  "BEARISH CONTINUATION",
-                "detail":  f"Flat support at ${flat_bot:,.0f}, falling highs",
-                "action":  "Wait for breakdown below support",
-                "strength": "🔥🔥"
-            })
-
-    # ── 7. BULL FLAG
-    if n >= 15:
-        seg = df.tail(15)
-        first5  = seg.head(5)
-        last10  = seg.tail(10)
-        pole_up = (first5["close"].iloc[-1] - first5["close"].iloc[0]) / first5["close"].iloc[0] > 0.02
-        flag_consolidation = abs(last10["close"].iloc[-1] - last10["close"].iloc[0]) / last10["close"].iloc[0] < 0.01
-        if pole_up and flag_consolidation:
-            patterns.append({
-                "name":    "Bull Flag 🟢",
-                "type":    "bullish",
-                "signal":  "BULLISH CONTINUATION",
-                "detail":  "Strong up move followed by tight consolidation",
-                "action":  "Enter long on breakout above flag",
-                "strength": "🔥🔥"
-            })
-
-    # ── 8. BEAR FLAG
-    if n >= 15:
-        seg = df.tail(15)
-        first5  = seg.head(5)
-        last10  = seg.tail(10)
-        pole_down = (first5["close"].iloc[-1] - first5["close"].iloc[0]) / first5["close"].iloc[0] < -0.02
-        flag_consolidation = abs(last10["close"].iloc[-1] - last10["close"].iloc[0]) / last10["close"].iloc[0] < 0.01
-        if pole_down and flag_consolidation:
-            patterns.append({
-                "name":    "Bear Flag 🔴",
-                "type":    "bearish",
-                "signal":  "BEARISH CONTINUATION",
-                "detail":  "Strong down move followed by tight consolidation",
-                "action":  "Enter short on breakdown below flag",
-                "strength": "🔥🔥"
-            })
-
-    # ── 9. SYMMETRICAL TRIANGLE
-    if n >= 20:
-        seg = df.tail(20)
-        falling_highs = seg["high"].iloc[-1] < seg["high"].iloc[0]
-        rising_lows   = seg["low"].iloc[-1]  > seg["low"].iloc[0]
-        if falling_highs and rising_lows:
-            patterns.append({
-                "name":    "Symmetrical Triangle ⚪",
-                "type":    "neutral",
-                "signal":  "BREAKOUT PENDING",
-                "detail":  "Compression — big move coming either direction",
-                "action":  "Wait for breakout direction, then follow",
-                "strength": "🔥🔥"
-            })
-
-    # ── 10. CHANNEL UP (bullish)
-    if n >= 20:
-        seg = df.tail(20)
-        higher_highs = seg["high"].iloc[-1] > seg["high"].iloc[0]
-        higher_lows  = seg["low"].iloc[-1]  > seg["low"].iloc[0]
-        parallel     = abs((seg["high"].iloc[-1]-seg["high"].iloc[0]) -
-                           (seg["low"].iloc[-1]-seg["low"].iloc[0])) < atr*3
-        if higher_highs and higher_lows and parallel:
-            patterns.append({
-                "name":    "Channel Up 🟢",
-                "type":    "bullish",
-                "signal":  "BULLISH TREND",
-                "detail":  "Price trending up in parallel channel",
-                "action":  "Buy near channel bottom, sell near top",
-                "strength": "🔥🔥"
-            })
-
-    # ── 11. CHANNEL DOWN (bearish)
-    if n >= 20:
-        seg = df.tail(20)
-        lower_highs = seg["high"].iloc[-1] < seg["high"].iloc[0]
-        lower_lows  = seg["low"].iloc[-1]  < seg["low"].iloc[0]
-        parallel    = abs((seg["high"].iloc[0]-seg["high"].iloc[-1]) -
-                          (seg["low"].iloc[0]-seg["low"].iloc[-1])) < atr*3
-        if lower_highs and lower_lows and parallel:
-            patterns.append({
-                "name":    "Channel Down 🔴",
-                "type":    "bearish",
-                "signal":  "BEARISH TREND",
-                "detail":  "Price trending down in parallel channel",
-                "action":  "Sell near channel top, cover near bottom",
-                "strength": "🔥🔥"
-            })
-
-    # ── 12. TRIPLE BOTTOM (bullish)
-    if n >= 30:
-        seg_lows = df["low"].tail(30).values
-        bottoms  = [i for i in range(2, 28)
-                    if seg_lows[i] < seg_lows[i-1] and seg_lows[i] < seg_lows[i+1]]
-        if len(bottoms) >= 3:
-            b1,b2,b3 = bottoms[-3], bottoms[-2], bottoms[-1]
-            if (abs(seg_lows[b1]-seg_lows[b2]) < tol and
-                abs(seg_lows[b2]-seg_lows[b3]) < tol):
-                patterns.append({
-                    "name":    "Triple Bottom 🟢",
-                    "type":    "bullish",
-                    "signal":  "STRONG BULLISH REVERSAL",
-                    "detail":  f"Three lows near ${seg_lows[b3]:,.0f} — very strong support",
-                    "action":  "Strong long setup on breakout",
-                    "strength": "🔥🔥🔥"
-                })
-
-    # ── 13. TRIPLE TOP (bearish)
-    if n >= 30:
-        seg_highs = df["high"].tail(30).values
-        tops = [i for i in range(2, 28)
-                if seg_highs[i] > seg_highs[i-1] and seg_highs[i] > seg_highs[i+1]]
-        if len(tops) >= 3:
-            t1,t2,t3 = tops[-3], tops[-2], tops[-1]
-            if (abs(seg_highs[t1]-seg_highs[t2]) < tol and
-                abs(seg_highs[t2]-seg_highs[t3]) < tol):
-                patterns.append({
-                    "name":    "Triple Top 🔴",
-                    "type":    "bearish",
-                    "signal":  "STRONG BEARISH REVERSAL",
-                    "detail":  f"Three peaks near ${seg_highs[t3]:,.0f} — very strong resistance",
-                    "action":  "Strong short setup on breakdown",
-                    "strength": "🔥🔥🔥"
-                })
-
-    # ── 14. WEDGE (rising = bearish, falling = bullish)
-    if n >= 20:
-        seg = df.tail(20)
-        hh = seg["high"].iloc[-1] > seg["high"].iloc[0]
-        lh = seg["high"].iloc[-1] < seg["high"].iloc[0]
-        hl = seg["low"].iloc[-1]  > seg["low"].iloc[0]
-        ll = seg["low"].iloc[-1]  < seg["low"].iloc[0]
-        # Rising wedge = bearish (both rising but converging)
-        h_rise = (seg["high"].iloc[-1]-seg["high"].iloc[0]) / seg["high"].iloc[0]
-        l_rise = (seg["low"].iloc[-1] -seg["low"].iloc[0])  / seg["low"].iloc[0]
-        if hh and hl and l_rise > h_rise * 1.5:
-            patterns.append({
-                "name":    "Rising Wedge 🔴",
-                "type":    "bearish",
-                "signal":  "BEARISH REVERSAL",
-                "detail":  "Price rising but compressing — breakdown likely",
-                "action":  "Watch for break below lower trendline",
-                "strength": "🔥🔥"
-            })
-        # Falling wedge = bullish
-        if lh and ll and abs(l_rise) > abs(h_rise) * 1.5:
-            patterns.append({
-                "name":    "Falling Wedge 🟢",
-                "type":    "bullish",
-                "signal":  "BULLISH REVERSAL",
-                "detail":  "Price falling but compressing — breakout likely",
-                "action":  "Watch for break above upper trendline",
-                "strength": "🔥🔥"
-            })
-
-    return patterns
-
-# Detect on main and entry timeframes
-patterns_main  = detect_patterns(df)
-patterns_entry = detect_patterns(df_entry) if not df_entry.empty else []
-
-# Display
-if patterns_main or patterns_entry:
-    # Summary signal
-    bull_p = [p for p in patterns_main + patterns_entry if p["type"] == "bullish"]
-    bear_p = [p for p in patterns_main + patterns_entry if p["type"] == "bearish"]
-    neut_p = [p for p in patterns_main + patterns_entry if p["type"] == "neutral"]
-
-    p_score = len(bull_p) - len(bear_p)
-    if p_score >= 2:   p_sig, p_css = "PATTERN BIAS: BULLISH 🟢", "bull-signal"
-    elif p_score <= -2: p_sig, p_css = "PATTERN BIAS: BEARISH 🔴", "bear-signal"
-    else:               p_sig, p_css = "PATTERN BIAS: MIXED ⚪", "neutral-signal"
-
-    st.markdown(f'<div class="signal-master {p_css}">{p_sig} | {len(bull_p)} Bull | {len(bear_p)} Bear patterns</div>', unsafe_allow_html=True)
-
-    # Tabs for timeframes
-    pt1, pt2 = st.tabs([f"📊 {timeframe} Patterns", f"⚡ {tf_entry} Patterns"])
-
-    with pt1:
-        if patterns_main:
-            for p in patterns_main:
-                color = "#00ff88" if p["type"]=="bullish" else "#ff4444" if p["type"]=="bearish" else "#888"
-                st.markdown(f"""
-                <div style="background:#0d0d1a;border:1px solid {color}44;border-left:4px solid {color};
-                border-radius:8px;padding:14px;margin:6px 0;">
-                <b style="color:{color};font-size:16px;">{p['name']}</b>
-                <span style="float:right;font-size:20px;">{p['strength']}</span><br>
-                <b style="color:#FFD700;">{p['signal']}</b><br>
-                <span style="color:#ddd;font-size:13px;">{p['detail']}</span><br>
-                <span style="color:#00bfff;font-size:12px;">💡 Action: {p['action']}</span>
-                </div>
-                """, unsafe_allow_html=True)
-                # Telegram alert
-                if alerts_on and tg_token and tg_chat_id and p["strength"] == "🔥🔥🔥":
-                    send_tg(tg_token, tg_chat_id,
-                        f"📐 PATTERN DETECTED\n{coin} | {timeframe}\n"
-                        f"{p['name']}\n{p['signal']}\n{p['detail']}\n"
-                        f"Action: {p['action']}")
-        else:
-            st.info(f"No clear patterns detected on {timeframe} right now — market may be ranging")
-
-    with pt2:
-        if patterns_entry:
-            for p in patterns_entry:
-                color = "#00ff88" if p["type"]=="bullish" else "#ff4444" if p["type"]=="bearish" else "#888"
-                st.markdown(f"""
-                <div style="background:#0d0d1a;border:1px solid {color}44;border-left:4px solid {color};
-                border-radius:8px;padding:14px;margin:6px 0;">
-                <b style="color:{color};font-size:16px;">{p['name']}</b>
-                <span style="float:right;font-size:20px;">{p['strength']}</span><br>
-                <b style="color:#FFD700;">{p['signal']}</b><br>
-                <span style="color:#ddd;font-size:13px;">{p['detail']}</span><br>
-                <span style="color:#00bfff;font-size:12px;">💡 Action: {p['action']}</span>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info(f"No clear patterns on {tf_entry} right now")
-
-else:
-    st.info("No strong patterns detected currently — this is normal, patterns form and break regularly")
-
-# Pattern education reference
-with st.expander("📚 Pattern Reference Guide — click to open"):
-    pe1, pe2, pe3 = st.columns(3)
-    with pe1:
-        st.markdown("""
-        **🟢 Bullish Patterns:**
-        - **Double Bottom** → Two equal lows → pump
-        - **Triple Bottom** → Three equal lows → strong pump
-        - **Inverse H&S** → Three lows, middle lowest → pump
-        - **Ascending Triangle** → Flat top, rising lows → breakout up
-        - **Bull Flag** → Strong up → consolidate → continue up
-        - **Falling Wedge** → Compressing down → break up
-        - **Channel Up** → Trend higher → buy the dips
-        """)
-    with pe2:
-        st.markdown("""
-        **🔴 Bearish Patterns:**
-        - **Double Top** → Two equal highs → dump
-        - **Triple Top** → Three equal highs → strong dump
-        - **Head & Shoulders** → Three peaks, middle highest → dump
-        - **Descending Triangle** → Flat bottom, falling highs → breakdown
-        - **Bear Flag** → Strong down → consolidate → continue down
-        - **Rising Wedge** → Compressing up → break down
-        - **Channel Down** → Trend lower → sell the rallies
-        """)
-    with pe3:
-        st.markdown("""
-        **⚪ Neutral Patterns:**
-        - **Symmetrical Triangle** → Big move coming — watch breakout direction
-        - **Rectangle** → Ranging — trade the boundaries
-        - **Pennant** → Tight consolidation → explosive move coming
-
-        **💡 Tips:**
-        - Wait for CONFIRMATION — don't trade the pattern, trade the break
-        - Higher timeframe pattern = stronger signal
-        - Combine with SMC — pattern + BOS = very strong setup
-        - Volume should increase on breakout
-        """)
-
-# ════════════════════════════════════════════════════════════════
-# MASTER SIGNAL ALERT — only fires when EVERYTHING aligns
-# ════════════════════════════════════════════════════════════════
-st.markdown("---")
-st.subheader("🏆 Master Confluence Signal")
-st.caption("Only fires when SMC + Indicators + Patterns + Volume Profile + Multi-TF ALL agree — highest quality signal")
-
-# Get all data needed
-try:
-    vp_master = calculate_volume_profile(df, bins=30)
-    poc_master = float(vp_master[vp_master["is_poc"]]["price"].values[0]) if not vp_master.empty else 0
-    vah_master = float(vp_master["vah"].iloc[0]) if not vp_master.empty else 0
-    val_master = float(vp_master["val"].iloc[0]) if not vp_master.empty else 0
-except:
-    poc_master = vah_master = val_master = 0
-
-patterns_all = detect_patterns(df)
-bull_pats = [p for p in patterns_all if p["type"]=="bullish"]
-bear_pats = [p for p in patterns_all if p["type"]=="bearish"]
-
-# Master LONG conditions
-# Safe defaults if not defined
-try: bull_count
-except NameError: bull_count = 0
-try: bear_count
-except NameError: bear_count = 0
-
-master_long = (
-    sc >= 6 and                          # Strong signal score
-    bias == "BULLISH" and               # Trend bullish
-    bull_count >= 2 and                 # 2+ TF aligned
-    lat["discount_zone"] and            # Discount zone
-    lat["rsi"] < 55 and                 # RSI not overbought
-    lat["macd"] > lat["macd_signal"] and # MACD bullish
-    (len(bear_pats) == 0 or len(bull_pats) > len(bear_pats)) and  # No conflicting patterns
-    (vah_master == 0 or float(lat["close"]) > val_master)         # Above VAL
-)
-
-# Master SHORT conditions
-master_short = (
-    sc <= -6 and                         # Strong bearish score
-    bias == "BEARISH" and               # Trend bearish
-    bear_count >= 2 and                 # 2+ TF aligned
-    lat["premium_zone"] and             # Premium zone
-    lat["rsi"] > 45 and                 # RSI not oversold
-    lat["macd"] < lat["macd_signal"] and # MACD bearish
-    (len(bull_pats) == 0 or len(bear_pats) > len(bull_pats)) and  # No conflicting patterns
-    (val_master == 0 or float(lat["close"]) < vah_master)         # Below VAH
-)
-
-mc1, mc2 = st.columns(2)
-with mc1:
-    if master_long:
-        st.markdown("""
-        <div style="background:#0d3b1e;border:3px solid #00ff88;border-radius:12px;
-        padding:20px;text-align:center;box-shadow:0 0 30px #00ff8855;">
-        <b style="color:#00ff88;font-size:28px;">🏆 MASTER LONG SIGNAL</b><br>
-        <span style="color:#aaa;">ALL conditions aligned!</span><br>
-        <b style="color:#00ff88;font-size:16px;">Highest probability setup</b>
-        </div>
-        """, unsafe_allow_html=True)
-        if alerts_on and tg_token and tg_chat_id:
-            send_tg(tg_token, tg_chat_id,
-                f"🏆🟢 <b>MASTER LONG SIGNAL!</b>\n"
-                f"ALL conditions aligned!\n"
-                f"Coin: {coin} | TF: {timeframe}\n"
-                f"Price: ${lat['close']:,.2f}\n"
-                f"Score: {sc}/30 | Bias: {bias}\n"
-                f"TF Aligned: {bull_count}/3\n"
-                f"Zone: Discount ✅\n"
-                f"RSI: {lat['rsi']:.1f} ✅\n"
-                f"MACD: Bullish ✅\n"
-                f"Patterns: {len(bull_pats)} bull vs {len(bear_pats)} bear\n"
-                f"POC: ${poc_master:,.0f}\n"
-                f"Time: {datetime.now().strftime('%H:%M')}\n\n"
-                f"⚡ Wait for 15m BOS then ENTER!")
-    else:
-        # Show what's missing
-        missing_long = []
-        if sc < 6:      missing_long.append(f"Signal score {sc}/30 (need 6+)")
-        if bias != "BULLISH": missing_long.append(f"Bias is {bias} (need BULLISH)")
-        if bull_count < 2:    missing_long.append(f"Only {bull_count}/3 TF aligned")
-        if not lat["discount_zone"]: missing_long.append("Not in discount zone")
-        if lat["rsi"] >= 55:  missing_long.append(f"RSI {lat['rsi']:.0f} too high")
-        if lat["macd"] <= lat["macd_signal"]: missing_long.append("MACD not bullish")
-
-        st.markdown(f"""
-        <div style="background:#0d0d1a;border:1px solid #33333a;border-radius:12px;padding:16px;">
-        <b style="color:#888;font-size:18px;">⚪ LONG — NOT YET</b><br>
-        <span style="color:#666;font-size:12px;">Missing conditions:</span><br>
-        {"<br>".join([f'<span style="color:#ff6666;font-size:12px;">❌ {m}</span>' for m in missing_long[:4]])}
-        </div>
-        """, unsafe_allow_html=True)
-
-with mc2:
-    if master_short:
-        st.markdown("""
-        <div style="background:#3b0d0d;border:3px solid #ff4444;border-radius:12px;
-        padding:20px;text-align:center;box-shadow:0 0 30px #ff444455;">
-        <b style="color:#ff4444;font-size:28px;">🏆 MASTER SHORT SIGNAL</b><br>
-        <span style="color:#aaa;">ALL conditions aligned!</span><br>
-        <b style="color:#ff4444;font-size:16px;">Highest probability setup</b>
-        </div>
-        """, unsafe_allow_html=True)
-        if alerts_on and tg_token and tg_chat_id:
-            send_tg(tg_token, tg_chat_id,
-                f"🏆🔴 <b>MASTER SHORT SIGNAL!</b>\n"
-                f"ALL conditions aligned!\n"
-                f"Coin: {coin} | TF: {timeframe}\n"
-                f"Price: ${lat['close']:,.2f}\n"
-                f"Score: {sc}/30 | Bias: {bias}\n"
-                f"TF Aligned: {bear_count}/3\n"
-                f"Zone: Premium ✅\n"
-                f"RSI: {lat['rsi']:.1f} ✅\n"
-                f"MACD: Bearish ✅\n"
-                f"Patterns: {len(bear_pats)} bear vs {len(bull_pats)} bull\n"
-                f"POC: ${poc_master:,.0f}\n"
-                f"Time: {datetime.now().strftime('%H:%M')}\n\n"
-                f"⚡ Wait for 15m BOS down then ENTER!")
-    else:
-        missing_short = []
-        if sc > -6:     missing_short.append(f"Signal score {sc}/30 (need -6 or less)")
-        if bias != "BEARISH": missing_short.append(f"Bias is {bias} (need BEARISH)")
-        if bear_count < 2:    missing_short.append(f"Only {bear_count}/3 TF aligned")
-        if not lat["premium_zone"]: missing_short.append("Not in premium zone")
-        if lat["rsi"] <= 45:  missing_short.append(f"RSI {lat['rsi']:.0f} too low")
-        if lat["macd"] >= lat["macd_signal"]: missing_short.append("MACD not bearish")
-
-        st.markdown(f"""
-        <div style="background:#0d0d1a;border:1px solid #33333a;border-radius:12px;padding:16px;">
-        <b style="color:#888;font-size:18px;">⚪ SHORT — NOT YET</b><br>
-        <span style="color:#666;font-size:12px;">Missing conditions:</span><br>
-        {"<br>".join([f'<span style="color:#ff6666;font-size:12px;">❌ {m}</span>' for m in missing_short[:4]])}
-        </div>
-        """, unsafe_allow_html=True)
-
-st.markdown("---")
-st.caption("Education only. Never risk money you cannot afford to lose.")
 
 # ── VOLUME PROFILE
 def calculate_volume_profile(df, bins=30):
-    """
-    Volume Profile = volume at each price level
-    Shows where most trading happened = key S/R levels
-    """
     price_min = df["low"].min()
     price_max = df["high"].max()
     price_range = price_max - price_min
+    if price_range == 0:
+        return pd.DataFrame()
     bin_size = price_range / bins
-
     vp = []
     for i in range(bins):
         level_low  = price_min + i * bin_size
         level_high = price_min + (i + 1) * bin_size
         level_mid  = (level_low + level_high) / 2
-
-        # Find candles that overlap this price level
         mask = (df["high"] >= level_low) & (df["low"] <= level_high)
         vol_at_level = df.loc[mask, "volume"].sum()
-
-        # Split into buy/sell volume
-        buy_mask  = mask & (df["close"] >= df["open"])
-        sell_mask = mask & (df["close"] < df["open"])
-        buy_vol   = df.loc[buy_mask,  "volume"].sum()
-        sell_vol  = df.loc[sell_mask, "volume"].sum()
-
-        vp.append({
-            "price":    level_mid,
-            "volume":   vol_at_level,
-            "buy_vol":  buy_vol,
-            "sell_vol": sell_vol,
-            "level_low":  level_low,
-            "level_high": level_high
-        })
-
+        buy_vol  = df.loc[mask & (df["close"] >= df["open"]), "volume"].sum()
+        sell_vol = df.loc[mask & (df["close"] <  df["open"]), "volume"].sum()
+        vp.append({"price":level_mid,"volume":vol_at_level,
+                   "buy_vol":buy_vol,"sell_vol":sell_vol,
+                   "level_low":level_low,"level_high":level_high})
     vp_df = pd.DataFrame(vp)
-    if not vp_df.empty:
+    if not vp_df.empty and vp_df["volume"].sum() > 0:
         max_vol = vp_df["volume"].max()
         vp_df["vol_pct"] = vp_df["volume"] / max_vol * 100
-
-        # Point of Control (POC) = highest volume price
         poc_idx = vp_df["volume"].idxmax()
         vp_df["is_poc"] = False
         vp_df.at[poc_idx, "is_poc"] = True
-
-        # Value Area (70% of volume)
         total_vol = vp_df["volume"].sum()
         va_threshold = total_vol * 0.70
         sorted_vp = vp_df.sort_values("volume", ascending=False)
@@ -4648,7 +5438,6 @@ def calculate_volume_profile(df, bins=30):
             if va_vol >= va_threshold:
                 break
         vp_df["in_value_area"] = vp_df["price"].isin(va_prices)
-        vp_df["vah"] = max(va_prices)  # Value Area High
-        vp_df["val"] = min(va_prices)  # Value Area Low
-
+        vp_df["vah"] = max(va_prices) if va_prices else price_max
+        vp_df["val"] = min(va_prices) if va_prices else price_min
     return vp_df
