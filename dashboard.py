@@ -81,13 +81,13 @@ tf_1h     = st.sidebar.checkbox("1H (Liquidity)",    value=True, key="tf_1")
 tf_entry  = st.sidebar.selectbox("Entry TF", ["15m","5m"], key="tf_e")
 timeframe = "4h"   # used for main analysis
 entry_tf  = tf_entry
-limit      = st.sidebar.slider("Candles", 100, 500, 200)
-auto_refresh = st.sidebar.checkbox("Auto Refresh 30s")
+limit      = st.sidebar.slider("Candles", 100, 500, 200, key="auto_2")
+auto_refresh = st.sidebar.checkbox("Auto Refresh 30s", key="auto_3")
 st.sidebar.markdown("---")
 st.sidebar.subheader("Telegram")
-tg_token   = st.sidebar.text_input("Bot Token", type="password", value="8247892871:AAEKDmYgPDFaJ0Biy6oOmBn339J-gCUjkDU")
-tg_chat_id = st.sidebar.text_input("Chat ID", value="5651074933")
-alerts_on  = st.sidebar.checkbox("Enable Alerts", value=True)
+tg_token   = st.sidebar.text_input("Bot Token", type="password", value="8247892871:AAEKDmYgPDFaJ0Biy6oOmBn339J-gCUjkDU", key="auto_4")
+tg_chat_id = st.sidebar.text_input("Chat ID", value="5651074933", key="auto_5")
+alerts_on  = st.sidebar.checkbox("Enable Alerts", value=True, key="auto_6")
 st.sidebar.markdown("---")
 alt_coins  = st.sidebar.multiselect("BTC Rotation Coins",
     ["ETH/USDT","SOL/USDT","ADA/USDT","MATIC/USDT","BNB/USDT","AVAX/USDT","LINK/USDT","DOT/USDT","ATOM/USDT","NEAR/USDT","OP/USDT","ARB/USDT","DOGE/USDT","XRP/USDT","INJ/USDT","SUI/USDT"], default=["SOL/USDT","ETH/USDT"])
@@ -2707,8 +2707,7 @@ if st.session_state.paper_position is None:
     st.markdown("**Open Paper Trade:**")
     pc1, pc2, pc3 = st.columns(3)
     p_dir    = pc1.selectbox("Direction", ["LONG","SHORT"], key="p_dir")
-    p_size   = pc2.number_input("Trade Size (USDT)", value=50.0, min_value=1.0,
-                                 max_value=st.session_state.paper_balance, key="p_size")
+    p_size   = pc2.number_input("Trade Size (USDT)", value=50.0, min_value=1.0, max_value=st.session_state.paper_balance, key="p_size")
     p_lev    = pc3.selectbox("Leverage", ["1x","2x","3x","5x","10x"], key="p_lev")
     p_sl     = st.number_input("Stop Loss Price", value=round(current_price * 0.98, 2), key="p_sl")
     p_tp     = st.number_input("Take Profit Price", value=round(current_price * 1.03, 2), key="p_tp")
@@ -2795,8 +2794,8 @@ st.subheader("🔬 Simple Backtesting")
 st.caption("Test how the BOS and CHoCH signals performed on past data")
 
 bt_col1, bt_col2 = st.columns(2)
-bt_signal = bt_col1.selectbox("Signal To Test", ["BOS Bullish","CHoCH Bullish","Buy Liquidity Sweep","Volume Spike + BOS"])
-bt_hold   = bt_col2.selectbox("Hold For (candles)", [1, 2, 3, 5, 10])
+bt_signal = bt_col1.selectbox("Signal To Test", ["BOS Bullish","CHoCH Bullish","Buy Liquidity Sweep","Volume Spike + BOS"], key="auto_ced1ac")
+bt_hold   = bt_col2.selectbox("Hold For (candles)", [1, 2, 3, 5, 10], key="auto_6433ad")
 
 if st.button("▶️ Run Backtest", key="btn_16"):
     with st.spinner("Running backtest on historical data..."):
@@ -4262,8 +4261,7 @@ if st.session_state.paper_position is None:
     st.markdown("**Open Paper Trade:**")
     pc1, pc2, pc3 = st.columns(3)
     p_dir    = pc1.selectbox("Direction", ["LONG","SHORT"], key="p_dir_2")
-    p_size   = pc2.number_input("Trade Size (USDT)", value=50.0, min_value=1.0,
-                                 max_value=st.session_state.paper_balance, key="p_size_2")
+    p_size   = pc2.number_input("Trade Size (USDT)", value=50.0, min_value=1.0, max_value=st.session_state.paper_balance, key="p_size_2")
     p_lev    = pc3.selectbox("Leverage", ["1x","2x","3x","5x","10x"], key="p_lev_2")
     p_sl     = st.number_input("Stop Loss Price", value=round(current_price * 0.98, 2), key="p_sl_2")
     p_tp     = st.number_input("Take Profit Price", value=round(current_price * 1.03, 2), key="p_tp_2")
@@ -4350,8 +4348,8 @@ st.subheader("🔬 Simple Backtesting")
 st.caption("Test how the BOS and CHoCH signals performed on past data")
 
 bt_col1, bt_col2 = st.columns(2)
-bt_signal = bt_col1.selectbox("Signal To Test", ["BOS Bullish","CHoCH Bullish","Buy Liquidity Sweep","Volume Spike + BOS"])
-bt_hold   = bt_col2.selectbox("Hold For (candles)", [1, 2, 3, 5, 10])
+bt_signal = bt_col1.selectbox("Signal To Test", ["BOS Bullish","CHoCH Bullish","Buy Liquidity Sweep","Volume Spike + BOS"], key="auto_ced1ac_2")
+bt_hold   = bt_col2.selectbox("Hold For (candles)", [1, 2, 3, 5, 10], key="auto_6433ad_2")
 
 if st.button("▶️ Run Backtest", key="btn_23"):
     with st.spinner("Running backtest on historical data..."):
@@ -5453,3 +5451,6 @@ def calculate_volume_profile(df, bins=30):
         vp_df["vah"] = max(va_prices) if va_prices else price_max
         vp_df["val"] = min(va_prices) if va_prices else price_min
     return vp_df
+
+st.markdown("---")
+st.caption("Education only. Never risk money you cannot afford to lose.")
